@@ -1,0 +1,670 @@
+package beansack
+
+// TODO: refactor this work on 
+// NOTE: this is kept for legacy knowledge purposes only
+// import (
+// 	"context"
+// 	"database/sql"
+// 	"database/sql/driver"
+// 	"errors"
+// 	"fmt"
+// 	"log"
+// 	"runtime"
+// 	"strings"
+// 	"time"
+
+// 	"github.com/jmoiron/sqlx"
+// 	"github.com/k0kubun/pp"
+// 	"github.com/marcboeker/go-duckdb/v2"
+// 	datautils "github.com/soumitsalman/data-utils"
+// 	// _ "github.com/mattn/go-sqlite3"
+// )
+
+// // const (
+// // 	BEAN_CORES      = "bean_cores"
+// // 	BEAN_EMBEDDINGS = "bean_embeddings"
+// // 	BEAN_CLUSTERS   = "bean_clusters"
+// // 	BEAN_CATEGORIES = "bean_categories"
+// // 	BEAN_SENTIMENTS = "bean_sentiments"
+// // 	BEAN_GISTS      = "bean_gists"
+// // 	BEAN_REGIONS    = "bean_regions"
+// // 	BEAN_ENTITIES   = "bean_entities"
+// // 	BEAN_CHATTERS   = "bean_chatters"
+// // 	BEAN_AGGREGATES = "bean_aggregates"
+// // 	CHATTERS        = "chatters"
+// // 	SOURCES         = "sources"
+// // 	CATEGORIES      = "categories"
+// // 	SENTIMENTS      = "sentiments"
+// // )
+
+// const (
+// 	MAX_COMPUTED_TAGS = 3
+// 	MAX_RELATED_EPS   = 0.43
+// )
+
+// type Ducksack struct {
+// 	connector *duckdb.Connector
+// 	db        *sql.DB
+// 	query     *sqlx.DB
+// 	dim       int
+// }
+
+// ////////// INITIALIZE DATABASE //////////
+
+// // func NewBeanlake(datapath string, initsql string, vectordim int) *Ducksack {
+
+// // 	conn, err := duckdb.NewConnector(fmt.Sprintf("%s?threads=%d", datapath, max(1, runtime.NumCPU()-1)), nil)
+// // 	noerror(err)
+// // 	return &Ducksack{
+// // 		connector: conn,
+// // 	}
+// // }
+
+// func NewBeansack(datapath string, initsql string, vectordim int, cluster_eps float64) *Ducksack {
+// 	conn, err := duckdb.NewConnector(fmt.Sprintf("%s?threads=%d", datapath, max(1, runtime.NumCPU()-1)), nil)
+// 	noerror(err, "CONNECTOR ERROR")
+
+// 	// open connection
+// 	db := sql.OpenDB(conn)
+// 	if initsql != "" {
+// 		_, err = db.Exec(fmt.Sprintf(initsql, vectordim, cluster_eps))
+// 		noerror(err, "INIT SQL ERROR")
+// 	}
+
+// 	return &Ducksack{
+// 		connector: conn,
+// 		db:        db,
+// 		query:     sqlx.NewDb(db, "duckdb"),
+// 		dim:       vectordim,
+// 	}
+// }
+
+// ////////// STORING FUNCTIONS //////////
+
+// // func (ds *Ducksack) getAppender(table string) *duckdb.Appender {
+// // 	conn, err := ds.connector.Connect(context.Background())
+// // 	noerror(err)
+// // 	appender, err := duckdb.NewAppenderFromConn(conn, "", table)
+// // 	noerror(err)
+// // 	return appender
+// // }
+
+// func appendToTable[T any](ds *Ducksack, table string, data []T, getfieldvalues func(item T) []driver.Value) int {
+// 	if data == nil {
+// 		return 0
+// 	}
+// 	conn, err := ds.connector.Connect(context.Background())
+// 	noerror(err, "CONNECTOR ERROR")
+// 	appender, err := duckdb.NewAppenderFromConn(conn, "", table)
+// 	noerror(err, "APPENDER ERROR")
+// 	defer appender.Close()
+// 	count := 0
+// 	for _, item := range data {
+// 		if err := appender.AppendRow(getfieldvalues(item)...); err != nil {
+// 			log.Println(err)
+// 		} else {
+// 			count++
+// 		}
+// 	}
+// 	return count
+// }
+
+// func prepareBeans(beans []Bean) []Bean {
+// 	now := time.Now()
+// 	for i := range beans {
+// 		if beans[i].Created.IsZero() {
+// 			beans[i].Created = now
+// 		}
+// 		// if beans[i].Updated.IsZero() {
+// 		// 	beans[i].Updated = now
+// 		// }
+// 		if beans[i].Collected.IsZero() {
+// 			beans[i].Collected = now
+// 		}
+// 		if beans[i].TitleLength == 0 {
+// 			beans[i].TitleLength = len(strings.Fields(beans[i].Title))
+// 		}
+// 		if beans[i].ContentLength == 0 {
+// 			beans[i].ContentLength = len(strings.Fields(beans[i].Content))
+// 		}
+// 		if beans[i].SummaryLength == 0 {
+// 			beans[i].SummaryLength = len(strings.Fields(beans[i].Summary))
+// 		}
+// 	}
+// 	return beans
+// }
+
+// // func (ds *Ducksack) StoreBeans(data []Bean) int {
+// // 	data = prepareBeans(data)
+// // 	// conn, err := ds.connector.Connect(context.Background())
+// // 	// noerror(err, "CONNECTOR ERROR")
+// // 	// appender, err := duckdb.NewAppenderFromConn(conn, "", "bean_cores")
+// // 	// noerror(err, "APPENDER ERROR")
+// // 	// defer appender.Close()
+// // 	sql := `INSERT INTO bean_cores
+// // 	(url, kind, title, title_length, content, content_length, summary, summary_length, author, source, created, collected)
+// // 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+// // 	stmt, err := ds.db.Prepare(sql)
+// // 	noerror(err, "PREPARE ERROR")
+// // 	defer stmt.Close()
+// // 	count := 0
+// // 	for _, item := range data {
+// // 		if _, err := stmt.Exec(item.URL, item.Kind, item.Title, item.TitleLength, item.Content, item.ContentLength, item.Summary, item.SummaryLength, item.Author, item.Source, item.Created, item.Collected); err != nil {
+// // 			log.Println("INSERT ERROR", err)
+// // 		} else {
+// // 			count++
+// // 		}
+// // 	}
+// // 	return count
+// // }
+
+// func (ds *Ducksack) StoreBeans(beans []Bean) int {
+// 	beans = prepareBeans(beans)
+// 	return appendToTable(ds, BEAN_CORES, beans, func(bean Bean) []driver.Value {
+// 		return []driver.Value{bean.URL, bean.Kind, bean.Title, bean.TitleLength, bean.Content, bean.ContentLength, bean.RestrictedContent, bean.Summary, bean.SummaryLength, bean.Author, bean.Source, bean.Created, bean.Collected}
+// 	})
+// }
+
+// func (ds *Ducksack) StoreEmbeddings(beans []Bean) int {
+// 	beans = datautils.Filter(beans, func(bean *Bean) bool {
+// 		return len(bean.Embedding) > 0
+// 	})
+// 	return appendToTable(ds, BEAN_EMBEDDINGS, beans, func(bean Bean) []driver.Value {
+// 		return []driver.Value{bean.URL, bean.Embedding}
+// 	})
+// }
+
+// func flattenTags(url string, data []string) []TagData {
+// 	return datautils.FilterAndTransform(data, func(tag *string) (bool, TagData) {
+// 		return len(*tag) > 0, TagData{URL: url, Tag: *tag}
+// 	})
+// }
+
+// func prepareTags(beans []Bean) map[string][]TagData {
+// 	// rough initialization
+// 	results := map[string][]TagData{
+// 		BEAN_CATEGORIES: make([]TagData, 0, 3*len(beans)),
+// 		BEAN_SENTIMENTS: make([]TagData, 0, 3*len(beans)),
+// 		BEAN_REGIONS:    make([]TagData, 0, 3*len(beans)),
+// 		BEAN_ENTITIES:   make([]TagData, 0, 3*len(beans)),
+// 		BEAN_GISTS:      make([]TagData, 0, len(beans)),
+// 	}
+// 	for _, bean := range beans {
+// 		if len(bean.Categories) > 0 {
+// 			results[BEAN_CATEGORIES] = append(results[BEAN_CATEGORIES], flattenTags(bean.URL, bean.Categories)...)
+// 		}
+// 		if len(bean.Sentiments) > 0 {
+// 			results[BEAN_SENTIMENTS] = append(results[BEAN_SENTIMENTS], flattenTags(bean.URL, bean.Sentiments)...)
+// 		}
+// 		if len(bean.Regions) > 0 {
+// 			results[BEAN_REGIONS] = append(results[BEAN_REGIONS], flattenTags(bean.URL, bean.Regions)...)
+// 		}
+// 		if len(bean.Entities) > 0 {
+// 			results[BEAN_ENTITIES] = append(results[BEAN_ENTITIES], flattenTags(bean.URL, bean.Entities)...)
+// 		}
+// 		if len(bean.Gist) > 0 {
+// 			results[BEAN_GISTS] = append(results[BEAN_GISTS], TagData{URL: bean.URL, Tag: bean.Gist})
+// 		}
+// 	}
+// 	return results
+// }
+
+// func (ds *Ducksack) storeTagsToTable(tags []TagData, tag_table string) int {
+// 	if len(tags) == 0 {
+// 		return 0
+// 	}
+// 	return appendToTable(ds, tag_table, tags, func(tag TagData) []driver.Value {
+// 		return []driver.Value{tag.URL, tag.Tag}
+// 	})
+// }
+
+// func (ds *Ducksack) StoreTags(beans []Bean) int {
+// 	tags := prepareTags(beans)
+// 	count := 0
+// 	if categories, ok := tags[BEAN_CATEGORIES]; ok {
+// 		count += ds.storeTagsToTable(categories, BEAN_CATEGORIES)
+// 	}
+// 	if sentiments, ok := tags[BEAN_SENTIMENTS]; ok {
+// 		count += ds.storeTagsToTable(sentiments, BEAN_SENTIMENTS)
+// 	}
+// 	if regions, ok := tags[BEAN_REGIONS]; ok {
+// 		count += ds.storeTagsToTable(regions, BEAN_REGIONS)
+// 	}
+// 	if entities, ok := tags[BEAN_ENTITIES]; ok {
+// 		count += ds.storeTagsToTable(entities, BEAN_ENTITIES)
+// 	}
+// 	if gist, ok := tags[BEAN_GISTS]; ok {
+// 		count += ds.storeTagsToTable(gist, BEAN_GISTS)
+// 	}
+// 	return count
+// }
+
+// func prepareChatters(chatters []Chatter) []Chatter {
+// 	now := time.Now()
+// 	for i := range chatters {
+// 		if chatters[i].Collected.IsZero() {
+// 			chatters[i].Collected = now
+// 		}
+// 	}
+// 	return chatters
+// }
+
+// func (ds *Ducksack) StoreChatters(chatters []Chatter) int {
+// 	chatters = prepareChatters(chatters)
+// 	return appendToTable(ds, CHATTERS, chatters, func(chatter Chatter) []driver.Value {
+// 		return []driver.Value{chatter.ChatterURL, chatter.BeanURL, chatter.Collected, chatter.Source, chatter.Forum, chatter.Likes, chatter.Comments, chatter.Subscribers}
+// 	})
+// }
+
+// func (ds *Ducksack) StoreSources(sources []Publisher) int {
+// 	return appendToTable(ds, SOURCES, sources, func(source Publisher) []driver.Value {
+// 		return []driver.Value{source.Name, source.Description, source.BaseURL, source.DomainName, source.Favicon, source.RSSFeed}
+// 	})
+// }
+
+// ////////// QUERY HELPERS //////////
+
+// // func mustIn(query string, args ...any) (string, []any) {
+// // 	query, args, err := sqlx.In(query, args...)
+// // 	noerror(err, "IN ERROR")
+// // 	return query, args
+// // }
+
+// // func shouldIn(query string, args ...any) (string, []any, error) {
+// // 	query, args, err := sqlx.In(query, args...)
+// // 	logerror(err, "IN ERROR")
+// // 	return query, args, err
+// // }
+
+// // func mustSelect[T any](ds *Ducksack, query string, args ...any) []T {
+// // 	var data []T
+// // 	noerror(ds.query.Select(&data, query, args...), "SELECT ERROR")
+// // 	return data
+// // }
+
+// // func shouldSelect[T any](ds *Ducksack, query string, args ...any) ([]T, error) {
+// // 	var data []T
+// // 	err := ds.query.Select(&data, query, args...)
+// // 	logerror(err, "SELECT ERROR")
+// // 	return data, err
+// // }
+
+// // func queryItems[T any](ds *Ducksack, sql string, urls []string) []T {
+// // 	if len(urls) == 0 {
+// // 		return nil
+// // 	}
+// // 	query, args := mustIn(sql, urls)
+// // 	var data []T
+// // 	noerror(ds.query.Select(&data, query, args...), "SELECT ERROR")
+// // 	return data
+// // }
+
+// ////////// DIRECT QUERY/GET FUNCTIONS //////////
+
+// // func (ds *Ducksack) Exists(urls []string) []string {
+// // 	return queryItems[string](ds, "SELECT url FROM bean_cores WHERE url IN (?);", urls)
+// // }
+
+// // func (ds *Ducksack) GetBeans(urls []string) []Bean {
+// // 	const _SQL_QUERY_BEANS = `
+// // 	SELECT * FROM bean_aggregates
+// // 	WHERE url IN (?);`
+// // 	return queryItems[Bean](ds, _SQL_QUERY_BEANS, urls)
+// // }
+
+// // func (ds *Ducksack) GetEmbeddings(urls []string) []Bean {
+// // 	return queryItems[Bean](ds, "SELECT * FROM bean_embeddings WHERE url IN (?);", urls)
+// // }
+
+// // func (ds *Ducksack) GetGists(urls []string) []Bean {
+// // 	return queryItems[Bean](ds, "SELECT * FROM bean_gists WHERE url IN (?);", urls)
+// // }
+
+// // func (ds *Ducksack) GetRegions(urls []string) []Bean {
+// // 	const _SQL_QUERY_REGIONS = `
+// // 	SELECT url, regions FROM bean_aggregates
+// // 	WHERE url IN (?);`
+// // 	return queryItems[Bean](ds, _SQL_QUERY_REGIONS, urls)
+// // }
+
+// // func (ds *Ducksack) GetEntities(urls []string) []Bean {
+// // 	const _SQL_QUERY_ENTITIES = `
+// // 	SELECT url, entities FROM bean_aggregates
+// // 	WHERE url IN (?);`
+// // 	return queryItems[Bean](ds, _SQL_QUERY_ENTITIES, urls)
+// // }
+
+// // func (ds *Ducksack) GetCategories(urls []string) []Bean {
+// // 	const _SQL_QUERY_CATEGORIES = `
+// // 	SELECT url, categories FROM bean_aggregates
+// // 	WHERE url IN (?);`
+// // 	return queryItems[Bean](ds, _SQL_QUERY_CATEGORIES, urls)
+// // }
+
+// // func (ds *Ducksack) GetSentiments(urls []string) []Bean {
+// // 	const _SQL_QUERY_SENTIMENTS = `
+// // 	SELECT url, sentiments FROM bean_aggregates
+// // 	WHERE url IN (?);`
+// // 	return queryItems[Bean](ds, _SQL_QUERY_SENTIMENTS, urls)
+// // }
+
+// // func (ds *Ducksack) GetRelated(urls []string) []Bean {
+// // 	const _SQL_QUERY_CLUSTERS = `
+// // 	SELECT url, LIST(DISTINCT related) AS related FROM bean_clusters
+// // 	WHERE url IN (?)
+// // 	GROUP BY url;`
+// // 	return queryItems[Bean](ds, _SQL_QUERY_CLUSTERS, urls)
+// // }
+
+// // func (ds *Ducksack) GetChatters(urls []string) []Chatter {
+// // 	return queryItems[Chatter](ds, "SELECT * FROM chatters WHERE bean_url IN (?) ORDER BY collected DESC;", urls)
+// // }
+
+// // func (ds *Ducksack) GetBeanChatters(urls []string) []BeanChatters {
+// // 	return queryItems[BeanChatters](ds, "SELECT * FROM bean_chatters WHERE url IN (?);", urls)
+// // }
+
+// // func (ds *Ducksack) GetSources(domain_names []string) []Source {
+// // 	const _SQL_QUERY_SOURCES = `
+// // 	SELECT * FROM sources
+// // 	WHERE domain_name IN (?);`
+// // 	return queryItems[Source](ds, _SQL_QUERY_SOURCES, domain_names)
+// // }
+
+// // ////////// DISTINCT ITEMS //////////
+
+// // func (ds *Ducksack) DistinctRegions() []string {
+// // 	const _SQL_GET_ALL_REGIONS = `SELECT DISTINCT region FROM bean_regions;`
+// // 	return mustSelect[string](ds, _SQL_GET_ALL_REGIONS)
+// // }
+
+// // func (ds *Ducksack) DistinctEntities() []string {
+// // 	const _SQL_GET_ALL_ENTITIES = `SELECT DISTINCT entity FROM bean_entities;`
+// // 	return mustSelect[string](ds, _SQL_GET_ALL_ENTITIES)
+// // }
+
+// // func (ds *Ducksack) DistinctCategories() []string {
+// // 	const _SQL_GET_ALL_CATEGORIES = `SELECT DISTINCT category FROM bean_categories;`
+// // 	return mustSelect[string](ds, _SQL_GET_ALL_CATEGORIES)
+// // }
+
+// // func (ds *Ducksack) DistinctSentiments() []string {
+// // 	const _SQL_GET_ALL_SENTIMENTS = `SELECT DISTINCT sentiment FROM bean_sentiments;`
+// // 	return mustSelect[string](ds, _SQL_GET_ALL_SENTIMENTS)
+// // }
+
+// // func (ds *Ducksack) DistinctSources() []string {
+// // 	const _SQL_GET_ALL_SOURCES = `SELECT DISTINCT source FROM bean_cores;`
+// // 	return mustSelect[string](ds, _SQL_GET_ALL_SOURCES)
+// // }
+
+// // ////////// COMPOSITE QUERIES ///////////
+// const _SQL_QUERY_BEANS_SELECT_FIELDS = `
+// SELECT %s FROM bean_aggregates
+// %s
+// %s
+// %s;`
+
+// func (ds *Ducksack) QueryBeansWithSelectFields(
+// 	kind string,
+// 	created_after time.Time,
+// 	categories []string,
+// 	regions []string,
+// 	entities []string,
+// 	sources []string,
+// 	addtional_where []string,
+// 	order_by []string,
+// 	offset int64, limit int64,
+// 	select_fields []string) ([]Bean, error) {
+
+// 	select_fields_sql := createSelectFields(select_fields...)
+// 	where_exprs, where_params := CreateWhereExprsForFieldValues(kind, created_after, categories, regions, entities, sources, 0)
+// 	where_sql := CombineWhereExprs(append(where_exprs, addtional_where...)...)
+// 	order_by_sql := CreateOrderByExprs(order_by...)
+// 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
+
+// 	sql := fmt.Sprintf(_SQL_QUERY_BEANS_SELECT_FIELDS, select_fields_sql, where_sql, order_by_sql, paging_sql)
+// 	sql, params := mustIn(sql, append(where_params, paging_params...)...)
+// 	return shouldSelect[Bean](ds, sql, params...)
+// }
+
+// func (ds *Ducksack) VectorSearchBeansWithSelectFields(
+// 	embedding []float32, max_distance float64,
+// 	kind string,
+// 	created_after time.Time,
+// 	categories []string,
+// 	regions []string,
+// 	entities []string,
+// 	sources []string,
+// 	addtional_where []string,
+// 	order_by []string,
+// 	offset int64, limit int64,
+// 	select_fields []string) ([]Bean, error) {
+
+// 	if len(embedding) == 0 {
+// 		return nil, errors.New("embedding is required")
+// 	}
+
+// 	select_fields_sql := createSelectFields(select_fields...)
+// 	select_fields_sql = fmt.Sprintf("%s, array_cosine_distance(embedding, ?::FLOAT[%d]) AS distance", select_fields_sql, ds.dim)
+// 	where_exprs, where_params := CreateWhereExprsForFieldValues(kind, created_after, categories, regions, entities, sources, max_distance)
+// 	where_sql := CombineWhereExprs(append(where_exprs, addtional_where...)...)
+// 	order_by_sql := CreateOrderByExprs(order_by...)
+// 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
+
+// 	sql := fmt.Sprintf(_SQL_QUERY_BEANS_SELECT_FIELDS, select_fields_sql, where_sql, order_by_sql, paging_sql)
+// 	params := []any{Float32Array(embedding)}
+// 	params = append(params, where_params...)
+// 	params = append(params, paging_params...)
+// 	sql, params = mustIn(sql, params...)
+// 	pp.Println("sql", sql, params)
+// 	return shouldSelect[Bean](ds, sql, params...)
+// }
+
+// const _SQL_QUERY_BEAN_CORES = `
+// SELECT * FROM bean_cores
+// %s
+// %s
+// %s;`
+
+// func (ds *Ducksack) QueryBeanCores(where []string, order_by []string, offset int64, limit int64) ([]Bean, error) {
+// 	where_sql := CombineWhereExprs(where...)
+// 	order_by_sql := CreateOrderByExprs(order_by...)
+// 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
+// 	sql := fmt.Sprintf(_SQL_QUERY_BEAN_CORES, where_sql, order_by_sql, paging_sql)
+// 	return shouldSelect[Bean](ds, sql, paging_params...)
+// }
+
+// const _SQL_QUERY_BEAN_AGGREGATES = `
+// SELECT * FROM bean_aggregates
+// %s
+// %s
+// %s;`
+
+// func (ds *Ducksack) QueryBeanAggregates(where []string, order_by []string, offset int64, limit int64) ([]Bean, error) {
+// 	where_sql := CombineWhereExprs(where...)
+// 	order_by_sql := CreateOrderByExprs(order_by...)
+// 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
+// 	sql := fmt.Sprintf(_SQL_QUERY_BEAN_AGGREGATES, where_sql, order_by_sql, paging_sql)
+// 	return shouldSelect[Bean](ds, sql, paging_params...)
+// }
+
+// const _SQL_DELETE_BEAN_CORES = `DELETE FROM bean_cores %s;`
+// const _SQL_DELETE_BEAN_EMBEDDINGS = `DELETE FROM bean_embeddings WHERE url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_BEAN_GISTS = `DELETE FROM bean_gists WHERE url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_BEAN_CATEGORIES = `DELETE FROM bean_categories WHERE url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_BEAN_SENTIMENTS = `DELETE FROM bean_sentiments WHERE url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_BEAN_REGIONS = `DELETE FROM bean_regions WHERE url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_BEAN_ENTITIES = `DELETE FROM bean_entities WHERE url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_BEAN_CHATTERS = `DELETE FROM chatters WHERE bean_url IN (SELECT url FROM bean_cores %s);`
+// const _SQL_DELETE_CHATTERS = `DELETE FROM chatters %s;`
+// const _SQL_DELETE_SOURCES = `DELETE FROM sources %s;`
+
+// func (ds *Ducksack) DeleteBeans(wheres ...string) error {
+// 	where_sql := CombineWhereExprs(wheres...)
+// 	errs := []error{}
+// 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_GISTS, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_EMBEDDINGS, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CATEGORIES, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_SENTIMENTS, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_REGIONS, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_ENTITIES, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CHATTERS, where_sql))
+// 	errs = append(errs, err)
+// 	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CORES, where_sql))
+// 	errs = append(errs, err)
+// 	return errors.Join(errs...)
+// }
+
+// func (ds *Ducksack) DeleteChatters(wheres ...string) error {
+// 	where_sql := CombineWhereExprs(wheres...)
+// 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_CHATTERS, where_sql))
+// 	logerror(err, "DELETE CHATTERS ERROR")
+// 	return err
+// }
+
+// func (ds *Ducksack) DeleteSources(wheres ...string) error {
+// 	where_sql := CombineWhereExprs(wheres...)
+// 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_SOURCES, where_sql))
+// 	logerror(err, "DELETE SOURCES ERROR")
+// 	return err
+// }
+
+// func createSelectFields(field_exprs ...string) string {
+// 	if len(field_exprs) > 0 {
+// 		return strings.Join(field_exprs, ", ")
+// 	}
+// 	return "*"
+// }
+
+// func CreateWhereExprsForFieldValues(
+// 	kind string,
+// 	created_after time.Time,
+// 	categories []string,
+// 	regions []string,
+// 	entities []string,
+// 	sources []string,
+// 	max_distance float64) ([]string, []any) {
+
+// 	params := []any{}
+// 	where_exprs := []string{}
+
+// 	if len(kind) > 0 {
+// 		where_exprs = append(where_exprs, "kind = ?")
+// 		params = append(params, kind)
+// 	}
+// 	if !created_after.IsZero() {
+// 		where_exprs = append(where_exprs, "created >= ?")
+// 		params = append(params, created_after)
+// 	}
+// 	if len(categories) > 0 {
+// 		where_exprs = append(where_exprs, "ARRAY_HAS_ANY(categories, ?)")
+// 		params = append(params, StringArray(categories))
+// 	}
+// 	if len(regions) > 0 {
+// 		where_exprs = append(where_exprs, "ARRAY_HAS_ANY(regions, ?)")
+// 		params = append(params, StringArray(regions))
+// 	}
+// 	if len(entities) > 0 {
+// 		where_exprs = append(where_exprs, "ARRAY_HAS_ANY(entities, ?)")
+// 		params = append(params, StringArray(entities))
+// 	}
+// 	if len(sources) > 0 {
+// 		where_exprs = append(where_exprs, "source IN (?)")
+// 		params = append(params, sources)
+// 	}
+// 	if max_distance > 0 {
+// 		where_exprs = append(where_exprs, "distance <= ?")
+// 		params = append(params, max_distance)
+// 	}
+// 	return where_exprs, params
+// }
+
+// func CreateWhereExprsForMissingTags(tagnames []string) []string {
+// 	exprs := make([]string, 0, len(tagnames))
+// 	for _, tag := range tagnames {
+// 		table_name := ""
+// 		switch tag {
+// 		case "gist":
+// 			table_name = "bean_gists"
+// 		case "embedding":
+// 			table_name = "bean_embeddings"
+// 		case "category":
+// 			table_name = "bean_categories"
+// 		case "sentiment":
+// 			table_name = "bean_sentiments"
+// 		case "region":
+// 		case "regions":
+// 			table_name = "bean_regions"
+// 		case "entity":
+// 		case "entities":
+// 			table_name = "bean_entities"
+// 		}
+// 		if table_name != "" {
+// 			exprs = append(exprs, fmt.Sprintf("url NOT IN (SELECT url FROM %s)", table_name))
+// 		}
+// 	}
+// 	return exprs
+// }
+
+// func CombineWhereExprs(exprs ...string) string {
+// 	if len(exprs) > 0 {
+// 		return fmt.Sprintf("WHERE %s", strings.Join(exprs, " AND "))
+// 	}
+// 	return ""
+// }
+
+// func CreatePaginationExprs(offset int64, limit int64) (string, []any) {
+// 	exprs := []string{}
+// 	params := []any{}
+// 	if offset > 0 {
+// 		exprs = append(exprs, "OFFSET ?")
+// 		params = append(params, offset)
+// 	}
+// 	if limit > 0 {
+// 		exprs = append(exprs, "LIMIT ?")
+// 		params = append(params, limit)
+// 	}
+// 	return strings.Join(exprs, " "), params
+// }
+
+// func CreateOrderByExprs(fields ...string) string {
+// 	if len(fields) > 0 {
+// 		return fmt.Sprintf("ORDER BY %s", strings.Join(fields, ", "))
+// 	}
+// 	return ""
+// }
+
+// ////////// ADMIN COMMANDS ///////////
+
+// func (ds *Ducksack) Execute(commands ...string) error {
+// 	errs := []error{}
+// 	for _, command := range commands {
+// 		_, err := ds.db.Exec(command)
+// 		errs = append(errs, err)
+// 	}
+// 	return errors.Join(errs...)
+// }
+
+// func (ds *Ducksack) Close() {
+// 	noerror(ds.query.Close(), "QUERY CLOSE ERROR")
+// 	noerror(ds.db.Close(), "DB CLOSE ERROR")
+// }
+
+// func noerror(err error, msg string) {
+// 	if err != nil {
+// 		log.Fatal(msg, ": ", err)
+// 	}
+// }
+
+// func logerror(err error, msg string) {
+// 	if err != nil {
+// 		log.Println(err)
+// 	}
+// }

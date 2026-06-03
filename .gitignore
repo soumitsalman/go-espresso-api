@@ -1,0 +1,10 @@
+*.env
+*.out
+*.log
+.logs
+.cache
+.db
+.espresso
+.tools
+nlp/.proto
+

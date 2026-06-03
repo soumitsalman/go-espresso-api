@@ -1,0 +1,587 @@
+{
+    "schemes": [
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Espresso is a curated business intelligence product suite. Espresso API \u0026 MCP provides access to the underlying data store.\nA **sip** is the basic unit of information: tick (micro data such as market performance for a day), event (a self-contained set of micro actions and ticks), and signal (larger derived intelligence from related events and ticks).\nAll sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.",
+        "title": "Espresso API \u0026 MCP",
+        "contact": {
+            "name": "Project Cafecito",
+            "url": "http://cafecito.tech",
+            "email": "soumitsrah@cafecito.tech"
+        },
+        "license": {
+            "name": "MIT"
+        },
+        "version": "0.1"
+    },
+    "paths": {
+        "/events": {
+            "get": {
+                "description": "Returns event-kind sips sorted by `created` descending (newest first).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "List events",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "fetch specific event sips by UUID (RFC 4122), e.g. 339366bc-464d-582f-8132-6875ccc814d2",
+                        "name": "ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "scalar tag filters (inclusive AND across supplied tags)",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 1024,
+                        "type": "string",
+                        "description": "semantic search query (max 1024 characters; requires embedder)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number",
+                        "default": 0.75,
+                        "description": "minimum embedding similarity for `q` (0.0-1.0, higher = stricter)",
+                        "name": "acc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "include events created on or after this date (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 128,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 16,
+                        "description": "page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "events sorted by created descending; additional digest keys may be present",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/router.Event"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "no matching events"
+                    },
+                    "400": {
+                        "description": "invalid query parameters or malformed UUID in ids",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "missing or invalid API key",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "database or embedder error",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/related/{relationship}": {
+            "get": {
+                "description": "Returns sips linked to the supplied UUIDs through the requested relationship.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Related"
+                ],
+                "summary": "List related sips",
+                "parameters": [
+                    {
+                        "enum": [
+                            "same_as",
+                            "derived_from"
+                        ],
+                        "type": "string",
+                        "description": "relationship to traverse",
+                        "name": "relationship",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "source sip UUIDs (RFC 4122), e.g. b07049b5-54c0-50b0-a620-d3aea3f8a173",
+                        "name": "ids",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 128,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 16,
+                        "description": "page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "related sips as flattened digests (Event or Signal field set per item; additional keys may be present)",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/router.Event"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "no related sips found"
+                    },
+                    "400": {
+                        "description": "missing ids, invalid relationship, or malformed UUID",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "missing or invalid API key",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "database error",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/signals": {
+            "get": {
+                "description": "Returns signal-kind sips sorted by `created` descending (newest first).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Signals"
+                ],
+                "summary": "List signals",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "fetch specific signal sips by UUID (RFC 4122), e.g. e7d7571a-13f0-56f0-8563-50863b79c781",
+                        "name": "ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "scalar tag filters (inclusive AND across supplied tags)",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 1024,
+                        "type": "string",
+                        "description": "semantic search query (max 1024 characters; requires embedder)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number",
+                        "default": 0.75,
+                        "description": "minimum embedding similarity for `q` (0.0-1.0, higher = stricter)",
+                        "name": "acc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "include signals created on or after this date (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 128,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 16,
+                        "description": "page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "signals sorted by created descending; additional digest keys may be present",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/router.Signal"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "no matching signals"
+                    },
+                    "400": {
+                        "description": "invalid query parameters or malformed UUID in ids",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "missing or invalid API key",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "database or embedder error",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tags": {
+            "get": {
+                "description": "Returns a paginated, alphabetically sorted list of unique tag strings extracted from event and signal sips. Tags can be passed to `/events` and `/signals` for scalar filtering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tags"
+                ],
+                "summary": "List tags",
+                "parameters": [
+                    {
+                        "maximum": 128,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 16,
+                        "description": "page limit (items per page)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "pagination offset (number of items to skip)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "paginated list of tag strings",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "no matching tags"
+                    },
+                    "400": {
+                        "description": "invalid pagination parameters",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "missing or invalid API key",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "database error",
+                        "schema": {
+                            "$ref": "#/definitions/router.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "router.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "invalid id: not-a-uuid"
+                }
+            }
+        },
+        "router.Event": {
+            "type": "object",
+            "properties": {
+                "briefing": {
+                    "type": "string",
+                    "example": "Discussion on recent Supreme Court rulings affecting redistricting and implications for Black political representation in Mississippi."
+                },
+                "created": {
+                    "type": "string",
+                    "example": "2026-05-19T06:00:00-04:00"
+                },
+                "cross_domain_impacts": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "Legislative actions influencing redistricting",
+                        "Judicial changes altering court mandates on fair representation"
+                    ]
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "political_analysis"
+                },
+                "future_outlook": {
+                    "type": "string",
+                    "example": "Concerns about erosion of Black political influence amid ongoing gerrymandering debates; potential shifts in power dynamics."
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "339366bc-464d-582f-8132-6875ccc814d2"
+                },
+                "impact_level": {
+                    "type": "string",
+                    "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                    ],
+                    "example": "high"
+                },
+                "key_events": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "Voting rights activism in 1987",
+                        "Supreme Court's Louisiana v. Callais decision"
+                    ]
+                },
+                "people": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "michael_watts",
+                        "rep_bennie_thompson"
+                    ]
+                },
+                "regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "mississippi",
+                        "deep_south"
+                    ]
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "voter_suppression",
+                        "gerrymandering",
+                        "racial_politics",
+                        "supreme_court",
+                        "political_representation"
+                    ]
+                }
+            }
+        },
+        "router.Signal": {
+            "type": "object",
+            "properties": {
+                "briefing": {
+                    "type": "string",
+                    "example": "On 2026-06-02, U.S. lawmakers and the Trump administration debated AI sovereign-wealth and compute-tax proposals amid soaring inflation..."
+                },
+                "created": {
+                    "type": "string",
+                    "example": "2026-06-02T14:02:00-04:00"
+                },
+                "drivers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "High inflation and rising consumer costs driven by supply-chain bottlenecks and geopolitical tensions."
+                    ]
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2026-06-01: Senator Bernie Sanders introduced a 50% ownership tax on major AI firms"
+                    ]
+                },
+                "forecast": {
+                    "type": "string",
+                    "example": "Short-term: Market volatility will persist, AI regulatory scrutiny will intensify, and consumer confidence remains low."
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "e7d7571a-13f0-56f0-8563-50863b79c781"
+                },
+                "impact_level": {
+                    "type": "string",
+                    "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                    ],
+                    "example": "high"
+                },
+                "impacted_domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "finance",
+                        "technology",
+                        "cybersecurity",
+                        "labor",
+                        "healthcare",
+                        "energy",
+                        "policy"
+                    ]
+                },
+                "impacts": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "9.3% market sell-off across tech and financial sectors.",
+                        "Decline in consumer confidence and increased credit-card delinquency."
+                    ]
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "ai_sovereign_wealth_fund",
+                        "ai_taxation",
+                        "compute_tax",
+                        "inflation",
+                        "market_volatility"
+                    ]
+                }
+            }
+        }
+    }
+}

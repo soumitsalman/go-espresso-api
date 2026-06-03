@@ -1,0 +1,428 @@
+definitions:
+  router.ErrorResponse:
+    properties:
+      error:
+        example: 'invalid id: not-a-uuid'
+        type: string
+    type: object
+  router.Event:
+    properties:
+      briefing:
+        example: Discussion on recent Supreme Court rulings affecting redistricting
+          and implications for Black political representation in Mississippi.
+        type: string
+      created:
+        example: "2026-05-19T06:00:00-04:00"
+        type: string
+      cross_domain_impacts:
+        example:
+        - Legislative actions influencing redistricting
+        - Judicial changes altering court mandates on fair representation
+        items:
+          type: string
+        type: array
+      event_type:
+        example: political_analysis
+        type: string
+      future_outlook:
+        example: Concerns about erosion of Black political influence amid ongoing
+          gerrymandering debates; potential shifts in power dynamics.
+        type: string
+      id:
+        example: 339366bc-464d-582f-8132-6875ccc814d2
+        format: uuid
+        type: string
+      impact_level:
+        enum:
+        - low
+        - medium
+        - high
+        example: high
+        type: string
+      key_events:
+        example:
+        - Voting rights activism in 1987
+        - Supreme Court's Louisiana v. Callais decision
+        items:
+          type: string
+        type: array
+      people:
+        example:
+        - michael_watts
+        - rep_bennie_thompson
+        items:
+          type: string
+        type: array
+      regions:
+        example:
+        - mississippi
+        - deep_south
+        items:
+          type: string
+        type: array
+      tags:
+        example:
+        - voter_suppression
+        - gerrymandering
+        - racial_politics
+        - supreme_court
+        - political_representation
+        items:
+          type: string
+        type: array
+    type: object
+  router.Signal:
+    properties:
+      briefing:
+        example: On 2026-06-02, U.S. lawmakers and the Trump administration debated
+          AI sovereign-wealth and compute-tax proposals amid soaring inflation...
+        type: string
+      created:
+        example: "2026-06-02T14:02:00-04:00"
+        type: string
+      drivers:
+        example:
+        - High inflation and rising consumer costs driven by supply-chain bottlenecks
+          and geopolitical tensions.
+        items:
+          type: string
+        type: array
+      events:
+        example:
+        - '2026-06-01: Senator Bernie Sanders introduced a 50% ownership tax on major
+          AI firms'
+        items:
+          type: string
+        type: array
+      forecast:
+        example: 'Short-term: Market volatility will persist, AI regulatory scrutiny
+          will intensify, and consumer confidence remains low.'
+        type: string
+      id:
+        example: e7d7571a-13f0-56f0-8563-50863b79c781
+        format: uuid
+        type: string
+      impact_level:
+        enum:
+        - low
+        - medium
+        - high
+        example: high
+        type: string
+      impacted_domains:
+        example:
+        - finance
+        - technology
+        - cybersecurity
+        - labor
+        - healthcare
+        - energy
+        - policy
+        items:
+          type: string
+        type: array
+      impacts:
+        example:
+        - 9.3% market sell-off across tech and financial sectors.
+        - Decline in consumer confidence and increased credit-card delinquency.
+        items:
+          type: string
+        type: array
+      tags:
+        example:
+        - ai_sovereign_wealth_fund
+        - ai_taxation
+        - compute_tax
+        - inflation
+        - market_volatility
+        items:
+          type: string
+        type: array
+    type: object
+info:
+  contact:
+    email: soumitsrah@cafecito.tech
+    name: Project Cafecito
+    url: http://cafecito.tech
+  description: |-
+    Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.
+    A **sip** is the basic unit of information: tick (micro data such as market performance for a day), event (a self-contained set of micro actions and ticks), and signal (larger derived intelligence from related events and ticks).
+    All sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.
+  license:
+    name: MIT
+  title: Espresso API & MCP
+  version: "0.1"
+paths:
+  /events:
+    get:
+      description: Returns event-kind sips sorted by `created` descending (newest
+        first).
+      parameters:
+      - collectionFormat: csv
+        description: fetch specific event sips by UUID (RFC 4122), e.g. 339366bc-464d-582f-8132-6875ccc814d2
+        in: query
+        items:
+          type: string
+        name: ids
+        type: array
+      - collectionFormat: csv
+        description: scalar tag filters (inclusive AND across supplied tags)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      - description: semantic search query (max 1024 characters; requires embedder)
+        in: query
+        maxLength: 1024
+        name: q
+        type: string
+      - default: 0.75
+        description: minimum embedding similarity for `q` (0.0-1.0, higher = stricter)
+        in: query
+        maximum: 1
+        minimum: 0
+        name: acc
+        type: number
+      - description: include events created on or after this date (YYYY-MM-DD)
+        format: date
+        in: query
+        name: from
+        type: string
+      - default: 16
+        description: page size
+        in: query
+        maximum: 128
+        minimum: 1
+        name: limit
+        type: integer
+      - description: pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: events sorted by created descending; additional digest keys
+            may be present
+          schema:
+            items:
+              $ref: '#/definitions/router.Event'
+            type: array
+        "204":
+          description: no matching events
+        "400":
+          description: invalid query parameters or malformed UUID in ids
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "401":
+          description: missing or invalid API key
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "429":
+          description: rate limit exceeded
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "500":
+          description: database or embedder error
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+      summary: List events
+      tags:
+      - Events
+  /related/{relationship}:
+    get:
+      description: Returns sips linked to the supplied UUIDs through the requested
+        relationship.
+      parameters:
+      - description: relationship to traverse
+        enum:
+        - same_as
+        - derived_from
+        in: path
+        name: relationship
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: source sip UUIDs (RFC 4122), e.g. b07049b5-54c0-50b0-a620-d3aea3f8a173
+        in: query
+        items:
+          type: string
+        name: ids
+        required: true
+        type: array
+      - default: 16
+        description: page size
+        in: query
+        maximum: 128
+        minimum: 1
+        name: limit
+        type: integer
+      - description: pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: related sips as flattened digests (Event or Signal field set
+            per item; additional keys may be present)
+          schema:
+            items:
+              $ref: '#/definitions/router.Event'
+            type: array
+        "204":
+          description: no related sips found
+        "400":
+          description: missing ids, invalid relationship, or malformed UUID
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "401":
+          description: missing or invalid API key
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "429":
+          description: rate limit exceeded
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "500":
+          description: database error
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+      summary: List related sips
+      tags:
+      - Related
+  /signals:
+    get:
+      description: Returns signal-kind sips sorted by `created` descending (newest
+        first).
+      parameters:
+      - collectionFormat: csv
+        description: fetch specific signal sips by UUID (RFC 4122), e.g. e7d7571a-13f0-56f0-8563-50863b79c781
+        in: query
+        items:
+          type: string
+        name: ids
+        type: array
+      - collectionFormat: csv
+        description: scalar tag filters (inclusive AND across supplied tags)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      - description: semantic search query (max 1024 characters; requires embedder)
+        in: query
+        maxLength: 1024
+        name: q
+        type: string
+      - default: 0.75
+        description: minimum embedding similarity for `q` (0.0-1.0, higher = stricter)
+        in: query
+        maximum: 1
+        minimum: 0
+        name: acc
+        type: number
+      - description: include signals created on or after this date (YYYY-MM-DD)
+        format: date
+        in: query
+        name: from
+        type: string
+      - default: 16
+        description: page size
+        in: query
+        maximum: 128
+        minimum: 1
+        name: limit
+        type: integer
+      - description: pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: signals sorted by created descending; additional digest keys
+            may be present
+          schema:
+            items:
+              $ref: '#/definitions/router.Signal'
+            type: array
+        "204":
+          description: no matching signals
+        "400":
+          description: invalid query parameters or malformed UUID in ids
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "401":
+          description: missing or invalid API key
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "429":
+          description: rate limit exceeded
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "500":
+          description: database or embedder error
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+      summary: List signals
+      tags:
+      - Signals
+  /tags:
+    get:
+      description: Returns a paginated, alphabetically sorted list of unique tag strings
+        extracted from event and signal sips. Tags can be passed to `/events` and
+        `/signals` for scalar filtering.
+      parameters:
+      - default: 16
+        description: page limit (items per page)
+        in: query
+        maximum: 128
+        minimum: 1
+        name: limit
+        type: integer
+      - description: pagination offset (number of items to skip)
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: paginated list of tag strings
+          schema:
+            items:
+              type: string
+            type: array
+        "204":
+          description: no matching tags
+        "400":
+          description: invalid pagination parameters
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "401":
+          description: missing or invalid API key
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "429":
+          description: rate limit exceeded
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+        "500":
+          description: database error
+          schema:
+            $ref: '#/definitions/router.ErrorResponse'
+      summary: List tags
+      tags:
+      - Tags
+schemes:
+- https
+swagger: "2.0"

@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  tei:
+    build:
+      context: .
+      dockerfile: TEI-Dockerfile
+    image: tei:local
+    ports:
+      - "10000:10000"
+    networks:
+      - espresso-net
+
+  espressoapi:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: espressoapi
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - EMBEDDER_BASE_URL=tei:10000
+    env_file:
+      - .env
+    depends_on:
+      - tei
+    networks:
+      - espresso-net
+
+networks:
+  espresso-net:
+    driver: bridge

@@ -1,0 +1,30 @@
+# Stage 1: Download the model
+FROM python:3.11-slim AS downloader
+
+# Define the model you want to bake in
+ARG MODEL_ID=avsolatorio/GIST-small-Embedding-v0
+ENV HF_HUB_ENABLE_HF_TRANSFER=1
+
+RUN pip install --no-cache-dir huggingface_hub[hf_transfer]
+
+# Download the model to a temporary local directory
+RUN mkdir -p /model && \
+    hf download ${MODEL_ID} --local-dir /model 
+
+# Stage 2: Final Inference Image
+# Use the tag matching your hardware (cpu, turing, 86, or hopper)
+FROM ghcr.io/huggingface/text-embeddings-inference:cpu-latest-grpc
+
+# TEI expects models in the /data directory by default
+COPY --from=downloader /model /data
+
+# Set Environment Variables
+ENV MODEL_ID=/data
+ENV PORT=10000
+
+# Expose the port
+EXPOSE 10000
+
+# The entrypoint is already defined in the base image, 
+# but we ensure it points to our local /data folder
+CMD ["--model-id", "/data", "--port", "10000"]
