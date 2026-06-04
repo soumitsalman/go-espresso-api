@@ -598,7 +598,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "",
 	Schemes:          []string{"https"},
 	Title:            "Espresso API & MCP",
-	Description:      "Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.\nA **sip** is the basic unit of information: tick (micro data such as market performance for a day), event (a self-contained set of micro actions and ticks), and signal (larger derived intelligence from related events and ticks).\nAll sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.",
+	Description:      "Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.\nA **sip** is the basic unit of information: action (micro data such as market performance for a day), event (a self-contained set of micro actions and actions), and signal (larger derived intelligence from related events and actions).\nAll sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

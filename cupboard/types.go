@@ -11,9 +11,9 @@ import (
 // JSON digest whose shape depends on the sip kind.
 //
 // There are three sip kinds:
-//   - tick: micro-level data points such as market performance for a given day
-//   - event: a self-contained set of related micro actions and ticks (for example a court ruling and its local fallout)
-//   - signal: larger derived intelligence synthesized from related events and ticks (for example cross-domain market and policy outlook)
+//   - action: micro-level data points such as market performance for a given day
+//   - event: a self-contained set of related micro actions and actions (for example a court ruling and its local fallout)
+//   - signal: larger derived intelligence synthesized from related events and actions (for example cross-domain market and policy outlook)
 //
 // List endpoints do not return this struct directly; the router flattens Digest and merges id and created into each JSON object.
 type Sip struct {

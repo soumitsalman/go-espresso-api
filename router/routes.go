@@ -1,7 +1,7 @@
 // @title 			Espresso API & MCP
 // @version 		0.1
 // @description 	Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.
-// @description 	A **sip** is the basic unit of information: tick (micro data such as market performance for a day), event (a self-contained set of micro actions and ticks), and signal (larger derived intelligence from related events and ticks).
+// @description 	A **sip** is the basic unit of information: action (micro data such as market performance for a day), event (a self-contained set of micro actions and actions), and signal (larger derived intelligence from related events and actions).
 // @description 	All sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.
 // @schemes 		https
 // @license.name 	MIT
@@ -23,7 +23,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	datautils "github.com/soumitsalman/data-utils"
 	"github.com/soumitsalman/espressoapi/cupboard"
 	"github.com/soumitsalman/espressoapi/nlp"
 	swaggerFiles "github.com/swaggo/files"
@@ -180,7 +179,7 @@ func (r *Configuration) getEvents(c *gin.Context) {
 // getSignals godoc
 // @Summary List signals
 // @Description Returns signal-kind sips sorted by `created` descending (newest first).
-// Signals are derived intelligence synthesized from related events and ticks.
+// Signals are derived intelligence synthesized from related events and actions.
 // Each item is a flattened digest: the router merges `id` (UUID) and `created` into the digest before responding.
 // Documented fields include `briefing`, `events`, `drivers`, `impacts`, `impacted_domains`, `forecast`, `impact_level`, and `tags`.
 // Individual signals may also carry additional pipeline-specific keys not listed in the schema.
@@ -260,6 +259,8 @@ func (r *Configuration) getRelated(c *gin.Context) {
 	)
 	returnResponse(c, items, err)
 }
+
+// TODO: add duplicate routes that flatten the output into a text-only format
 
 func NewRouter(db *cupboard.Cupboard, embedder nlp.Embedder, api_keys map[string]string, max_concurrent_requests int) *gin.Engine {
 	if max_concurrent_requests <= 0 {
@@ -375,16 +376,6 @@ func returnResponse[T any](c *gin.Context, items []T, err error) {
 		return
 	}
 	c.JSON(http.StatusOK, items)
-}
-
-func flattenSips(sips []cupboard.Sip) []map[string]any {
-	sips = datautils.ForEach(sips, func(sip *cupboard.Sip) {
-		sip.Digest["id"] = sip.ID
-		sip.Digest["created"] = sip.Created
-	})
-	return datautils.Transform(sips, func(sip *cupboard.Sip) map[string]any {
-		return sip.Digest
-	})
 }
 
 func convertStringsToUUIDs(strings []string) ([]uuid.UUID, error) {

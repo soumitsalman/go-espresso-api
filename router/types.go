@@ -1,5 +1,10 @@
 package router
 
+import (
+	datautils "github.com/soumitsalman/data-utils"
+	"github.com/soumitsalman/espressoapi/cupboard"
+)
+
 // ErrorResponse is the standard JSON error envelope for 4xx and 5xx responses.
 type ErrorResponse struct {
 	Error string `json:"error" example:"invalid id: not-a-uuid"`
@@ -16,8 +21,7 @@ type Event struct {
 	EventType          string   `json:"event_type" example:"political_analysis"`
 	ImpactLevel        string   `json:"impact_level" example:"high" enums:"low,medium,high"`
 	FutureOutlook      string   `json:"future_outlook" example:"Concerns about erosion of Black political influence amid ongoing gerrymandering debates; potential shifts in power dynamics."`
-	KeyEvents          []string `json:"key_events" example:"Voting rights activism in 1987,Supreme Court's Louisiana v. Callais decision"`
-	Events             []string `json:"events" example:"2026-06-01: Senator Bernie Sanders introduced a 50% ownership tax on major AI firms"`
+	Actions            []string `json:"actions" example:"Senator Bernie Sanders introduced a 50% ownership tax on major AI firms"`
 	CrossDomainImpacts []string `json:"cross_domain_impacts" example:"Legislative actions influencing redistricting,Judicial changes altering court mandates on fair representation"`
 	People             []string `json:"people" example:"michael_watts,rep_bennie_thompson"`
 	Regions            []string `json:"regions" example:"mississippi,deep_south"`
@@ -39,4 +43,21 @@ type Signal struct {
 	Drivers         []string `json:"drivers" example:"High inflation and rising consumer costs driven by supply-chain bottlenecks and geopolitical tensions."`
 	ImpactedDomains []string `json:"impacted_domains" example:"finance,technology,cybersecurity,labor,healthcare,energy,policy"`
 	Tags            []string `json:"tags" example:"ai_sovereign_wealth_fund,ai_taxation,compute_tax,inflation,market_volatility"`
+}
+
+func flattenSips(sips []cupboard.Sip) []map[string]any {
+	sips = datautils.ForEach(sips, func(sip *cupboard.Sip) {
+		sip.Digest["id"] = sip.ID
+		sip.Digest["created"] = sip.Created
+		if actions, ok := sip.Digest["key_events"].([]string); ok {
+			sip.Digest["actions"] = actions
+			delete(sip.Digest, "key_events")
+		} else if actions, ok := sip.Digest["events"].([]string); ok {
+			sip.Digest["actions"] = actions
+			delete(sip.Digest, "events")
+		}
+	})
+	return datautils.Transform(sips, func(sip *cupboard.Sip) map[string]any {
+		return sip.Digest
+	})
 }

@@ -12,13 +12,117 @@ A **sip** is the basic unit of information. Each sip is stored with a UUID prima
 
 | Kind | Description |
 |------|-------------|
-| **tick** | Micro-level data points such as market performance for a given day |
-| **event** | A self-contained set of related micro actions and ticks (for example a court ruling and its local fallout) |
-| **signal** | Larger derived intelligence synthesized from related events and ticks (for example cross-domain market and policy outlook) |
+| **action** | Micro-level data points or actions such as market performance for a given day |
+| **event** | A self-contained set of related micro actions and actions (for example a court ruling and its local fallout) |
+| **signal** | Larger derived intelligence synthesized from related events and actions (for example cross-domain market and policy outlook) |
 
 All sip identifiers are **UUIDs** (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.
 
 List endpoints do not return the raw database row. The router **flattens** each sip's digest and merges `id` and `created` into every JSON object. The documented response fields in `router/types.go` are the stable, commonly present keys; individual records may include additional pipeline-specific keys.
+
+### Database schema
+
+The API expects a PostgreSQL database initialized by the Espresso ingestion pipeline (`pycoffeemaker/pycupboard/pgcupboard.py`). The schema below matches that module's `_INIT_STMTS`.
+
+**Extensions**
+
+| Extension | Purpose |
+|-----------|---------|
+| `vector` | pgvector for sip embeddings (`vector(384)`) |
+| `pg_trgm` | Trigram support (used by the pipeline) |
+
+**Helper function**
+
+```sql
+CREATE OR REPLACE FUNCTION immutable_tags_to_text(tags text[])
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+    SELECT array_to_string(COALESCE(tags, '{}'), ' ');
+$$;
+```
+
+#### Table: `sips`
+
+Primary store for all sip kinds. Rows are immutable after insert (`ON CONFLICT DO NOTHING` on ingest).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `UUID` | Primary key (deterministic from `url` at ingest) |
+| `kind` | `TEXT` | `action`, `event`, or `signal` |
+| `created` | `TIMESTAMPTZ` | Creation time; drives default list ordering |
+| `source` | `UUID` | Optional FK to `sources.id` (not enforced) |
+| `embedding` | `vector(384)` | Dense vector for semantic search (`q` / `acc` on list routes) |
+| `tags` | `TEXT[]` | Facet tags; AND-filtered on `/events` and `/signals` |
+| `tags_fts` | `tsvector` | Generated stored column: `to_tsvector('simple', immutable_tags_to_text(tags))` |
+| `digest` | `JSONB` | Kind-specific payload; flattened in API responses |
+| `url` | `TEXT` | Canonical content URL (used to derive `id`) |
+| `base_url` | `TEXT` | Publisher base URL (used to derive `source`) |
+
+**Indexes on `sips`:** `url`, `base_url`, `kind`, `created`, `source`, `tags` (GIN on `tags_fts`), HNSW on `embedding` (`vector_cosine_ops`, `m = 16`, `ef_construction = 64`).
+
+#### Table: `sources`
+
+Publishers referenced by `sips.source`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `UUID` | Primary key (deterministic from `base_url` at ingest) |
+| `base_url` | `TEXT` | Unique publisher origin |
+| `domain_name` | `TEXT` | Hostname |
+| `site_name` | `TEXT` | Display name |
+| `description` | `TEXT` | Publisher blurb |
+| `favicon` | `TEXT` | Favicon URL |
+| `rss_feed` | `TEXT` | RSS feed URL |
+
+**Index on `sources`:** `base_url`.
+
+#### Table: `relations`
+
+Directed edges between sips. `from_id` and `to_id` reference `sips.id` by convention only (no FK constraint, for ingest performance).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `from_id` | `UUID` | Source sip |
+| `to_id` | `UUID` | Target sip |
+| `relationship` | `TEXT` | Edge type; API exposes `same_as` and `derived_from` via `/related/{relationship}` |
+
+**Unique constraint:** `(from_id, to_id, relationship)`.
+
+**Indexes on `relations`:** `from_id`, `to_id`, `relationship`.
+
+```mermaid
+erDiagram
+    sources ||--o{ sips : "source"
+    sips ||--o{ relations : "from_id"
+    sips ||--o{ relations : "to_id"
+
+    sources {
+        uuid id PK
+        text base_url
+        text domain_name
+        text site_name
+    }
+
+    sips {
+        uuid id PK
+        text kind
+        timestamptz created
+        uuid source
+        vector embedding
+        text_array tags
+        jsonb digest
+        text url
+    }
+
+    relations {
+        uuid from_id
+        uuid to_id
+        text relationship
+    }
+```
 
 Interactive schema documentation is available at `/swagger/index.html` after running the server (generated from `router/routes.go` and `router/types.go` via [swaggo](https://github.com/swaggo/swag)).
 
@@ -127,7 +231,7 @@ curl -s $AUTH \
   "event_type": "political_analysis",
   "impact_level": "high",
   "future_outlook": "Concerns about erosion of Black political influence...",
-  "key_events": [
+  "actions": [
     "Voting rights activism in 1987",
     "Supreme Court's Louisiana v. Callais decision"
   ],
@@ -156,7 +260,7 @@ curl -s $AUTH \
 |---|---|
 | **Method** | `GET` |
 | **Path** | `/signals` |
-| **Description** | Signal-kind sips (derived intelligence from related events and ticks), sorted by `created` descending. Supports the same filters as `/events`. |
+| **Description** | Signal-kind sips (derived intelligence from related events and actions), sorted by `created` descending. Supports the same filters as `/events`. |
 
 **Query parameters:** Same as [Events](#events).
 
