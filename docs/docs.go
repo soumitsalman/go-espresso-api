@@ -9,14 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {
-            "name": "Project Cafecito",
-            "url": "http://cafecito.tech",
-            "email": "soumitsrah@cafecito.tech"
-        },
-        "license": {
-            "name": "MIT"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -24,9 +17,10 @@ const docTemplate = `{
     "paths": {
         "/events": {
             "get": {
-                "description": "Returns event-kind sips sorted by ` + "`" + `created` + "`" + ` descending (newest first).",
+                "description": "Returns event-kind sips sorted by ` + "`" + `created` + "`" + ` descending (newest first).\nWith ` + "`" + `response_type=text` + "`" + `, each event is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.",
                 "produces": [
-                    "application/json"
+                    "application/json",
+                    "text/plain"
                 ],
                 "tags": [
                     "Events"
@@ -77,6 +71,17 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "json",
+                            "text"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "output format: json (default) returns a JSON array of flattened digests; text returns the same data as flat plain text without JSON syntax (lower token cost for MCPs and AI agents)",
+                        "name": "response_type",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
@@ -95,12 +100,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "events sorted by created descending; additional digest keys may be present",
+                        "description": "plain-text event digests (one record per block) when response_type=text",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/router.Event"
-                            }
+                            "type": "string"
                         }
                     },
                     "204": {
@@ -135,9 +137,10 @@ const docTemplate = `{
         },
         "/related/{relationship}": {
             "get": {
-                "description": "Returns sips linked to the supplied UUIDs through the requested relationship.",
+                "description": "Returns sips linked to the supplied UUIDs through the requested relationship.\nWith ` + "`" + `response_type=text` + "`" + `, each related sip is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.",
                 "produces": [
-                    "application/json"
+                    "application/json",
+                    "text/plain"
                 ],
                 "tags": [
                     "Related"
@@ -167,6 +170,17 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "enum": [
+                            "json",
+                            "text"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "output format: json (default) returns a JSON array of flattened digests; text returns the same data as flat plain text without JSON syntax (lower token cost for MCPs and AI agents)",
+                        "name": "response_type",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
@@ -185,12 +199,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "related sips as flattened digests (Event or Signal field set per item; additional keys may be present)",
+                        "description": "plain-text related-sip digests (one record per block) when response_type=text",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/router.Event"
-                            }
+                            "type": "string"
                         }
                     },
                     "204": {
@@ -225,9 +236,10 @@ const docTemplate = `{
         },
         "/signals": {
             "get": {
-                "description": "Returns signal-kind sips sorted by ` + "`" + `created` + "`" + ` descending (newest first).",
+                "description": "Returns signal-kind sips sorted by ` + "`" + `created` + "`" + ` descending (newest first).\nWith ` + "`" + `response_type=text` + "`" + `, each signal is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.",
                 "produces": [
-                    "application/json"
+                    "application/json",
+                    "text/plain"
                 ],
                 "tags": [
                     "Signals"
@@ -278,6 +290,17 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "json",
+                            "text"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "output format: json (default) returns a JSON array of flattened digests; text returns the same data as flat plain text without JSON syntax (lower token cost for MCPs and AI agents)",
+                        "name": "response_type",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
@@ -296,12 +319,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "signals sorted by created descending; additional digest keys may be present",
+                        "description": "plain-text signal digests (one record per block) when response_type=text",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/router.Signal"
-                            }
+                            "type": "string"
                         }
                     },
                     "204": {
@@ -336,15 +356,27 @@ const docTemplate = `{
         },
         "/tags": {
             "get": {
-                "description": "Returns a paginated, alphabetically sorted list of unique tag strings extracted from event and signal sips. Tags can be passed to ` + "`" + `/events` + "`" + ` and ` + "`" + `/signals` + "`" + ` for scalar filtering.",
+                "description": "Returns a paginated, alphabetically sorted list of unique tag strings extracted from event and signal sips. Tags can be passed to ` + "`" + `/events` + "`" + ` and ` + "`" + `/signals` + "`" + ` for scalar filtering.\nWith ` + "`" + `response_type=text` + "`" + `, tags are returned as a single comma-separated plain-text string instead of a JSON array.",
                 "produces": [
-                    "application/json"
+                    "application/json",
+                    "text/plain"
                 ],
                 "tags": [
                     "Tags"
                 ],
                 "summary": "List tags",
                 "parameters": [
+                    {
+                        "enum": [
+                            "json",
+                            "text"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "output format: json (default) returns a JSON string array; text returns the same tags as comma-separated plain text (lower token cost for MCPs and AI agents)",
+                        "name": "response_type",
+                        "in": "query"
+                    },
                     {
                         "maximum": 128,
                         "minimum": 1,
@@ -364,12 +396,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "paginated list of tag strings",
+                        "description": "comma-separated tags when response_type=text",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
+                            "type": "string"
                         }
                     },
                     "204": {
@@ -416,6 +445,15 @@ const docTemplate = `{
         "router.Event": {
             "type": "object",
             "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "Senator Bernie Sanders introduced a 50% ownership tax on major AI firms"
+                    ]
+                },
                 "briefing": {
                     "type": "string",
                     "example": "Discussion on recent Supreme Court rulings affecting redistricting and implications for Black political representation in Mississippi."
@@ -455,16 +493,6 @@ const docTemplate = `{
                         "high"
                     ],
                     "example": "high"
-                },
-                "key_events": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "Voting rights activism in 1987",
-                        "Supreme Court's Louisiana v. Callais decision"
-                    ]
                 },
                 "people": {
                     "type": "array",
@@ -593,12 +621,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "0.1",
+	Version:          "",
 	Host:             "",
 	BasePath:         "",
-	Schemes:          []string{"https"},
-	Title:            "Espresso API & MCP",
-	Description:      "Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.\nA **sip** is the basic unit of information: action (micro data such as market performance for a day), event (a self-contained set of micro actions and actions), and signal (larger derived intelligence from related events and actions).\nAll sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.",
+	Schemes:          []string{},
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

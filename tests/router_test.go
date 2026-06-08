@@ -233,6 +233,37 @@ func TestRouterVectorSearchSignals(t *testing.T) {
 	pp.Println("SIPS", sips)
 }
 
+func TestRouterScalarSearchEventsText(t *testing.T) {
+	srv := newTestHTTPServer(t)
+	params := url.Values{}
+	for _, tag := range testScalarTags {
+		params.Add("tags", tag)
+	}
+	params.Set("from", testSearchFrom().Format("2006-01-02"))
+	params.Set("response_type", "text")
+
+	status, body := routerGET(t, srv.URL, routeEvents, params, "")
+	requireStatus(t, http.StatusOK, status, body)
+	text := string(body)
+	assert.Contains(t, text, "date:")
+	pp.Println("TEXT", text)
+}
+
+func TestRouterVectorSearchSignalsText(t *testing.T) {
+	srv := newTestHTTPServer(t)
+	params := url.Values{}
+	params.Set("q", testVectorQuery)
+	params.Set("acc", "0.6")
+	params.Set("limit", "5")
+	params.Set("response_type", "text")
+
+	status, body := routerGET(t, srv.URL, routeSignals, params, "")
+	requireStatus(t, http.StatusOK, status, body)
+	text := string(body)
+	assert.Contains(t, text, "date:")
+	pp.Println("TEXT", text)
+}
+
 // --- stress tests against a live server ---
 
 type stressResult struct {

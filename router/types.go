@@ -1,6 +1,10 @@
 package router
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	datautils "github.com/soumitsalman/data-utils"
 	"github.com/soumitsalman/espressoapi/cupboard"
 )
@@ -45,19 +49,89 @@ type Signal struct {
 	Tags            []string `json:"tags" example:"ai_sovereign_wealth_fund,ai_taxation,compute_tax,inflation,market_volatility"`
 }
 
-func flattenSips(sips []cupboard.Sip) []map[string]any {
-	sips = datautils.ForEach(sips, func(sip *cupboard.Sip) {
-		sip.Digest["id"] = sip.ID
-		sip.Digest["created"] = sip.Created
-		if actions, ok := sip.Digest["key_events"].([]string); ok {
-			sip.Digest["actions"] = actions
-			delete(sip.Digest, "key_events")
-		} else if actions, ok := sip.Digest["events"].([]string); ok {
-			sip.Digest["actions"] = actions
-			delete(sip.Digest, "events")
-		}
-	})
+func sipsToDigest(sips []cupboard.Sip) []map[string]any {
+	for i := range sips {
+		sips[i].Digest["id"] = sips[i].ID
+		sips[i].Digest["created"] = sips[i].Created
+	}
 	return datautils.Transform(sips, func(sip *cupboard.Sip) map[string]any {
 		return sip.Digest
 	})
+}
+
+var _TAG_FIELDS = map[string]struct{}{
+	"regions":       {},
+	"people":        {},
+	"products":      {},
+	"companies":     {},
+	"organization":  {},
+	"stock_tickers": {},
+	"tags":          {},
+}
+
+func sipsToText(sips []cupboard.Sip) string {
+	text := strings.Builder{}
+	for _, sip := range sips {
+		text.WriteString("date: ")
+		text.WriteString(sip.Created.Format(time.DateOnly))
+		text.WriteByte('\n')
+
+		tags := make(map[string]struct{}, 10)
+		for key, value := range sip.Digest {
+			if _, ok := _TAG_FIELDS[key]; ok {
+				appendTags(tags, value)
+			} else {
+				text.WriteString(key)
+				text.WriteString(": ")
+				appendValue(&text, value)
+				text.WriteByte('\n')
+			}
+		}
+		if len(tags) > 0 {
+			tag_items, _ := datautils.MapToArray(tags)
+			text.WriteString("related_to: ")
+			text.WriteString(strings.Join(tag_items, ", "))
+			text.WriteByte('\n')
+		}
+		text.WriteByte('\n')
+	}
+	return text.String()
+}
+
+func appendValue(text *strings.Builder, value any) {
+	switch typed := value.(type) {
+	case []string:
+		text.WriteString(strings.Join(typed, ", "))
+	case []any:
+		for i, item := range typed {
+			if i > 0 {
+				text.WriteString(", ")
+			}
+			text.WriteString(fmt.Sprint(item))
+		}
+	case []int:
+		for i, item := range typed {
+			if i > 0 {
+				text.WriteString(", ")
+			}
+			text.WriteString(fmt.Sprint(item))
+		}
+	default:
+		text.WriteString(fmt.Sprint(typed))
+	}
+}
+
+func appendTags(seen map[string]struct{}, value any) {
+	switch typed := value.(type) {
+	case []string:
+		for _, tag := range typed {
+			seen[tag] = struct{}{}
+		}
+	case []any:
+		for _, tag := range typed {
+			seen[fmt.Sprint(tag)] = struct{}{}
+		}
+	default:
+		seen[fmt.Sprint(typed)] = struct{}{}
+	}
 }

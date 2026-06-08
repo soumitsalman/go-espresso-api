@@ -3,6 +3,7 @@
 // @description 	Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.
 // @description 	A **sip** is the basic unit of information: action (micro data such as market performance for a day), event (a self-contained set of micro actions and actions), and signal (larger derived intelligence from related events and actions).
 // @description 	All sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.
+// @description 	List endpoints accept an optional `response_type` query parameter: `json` (default) or `text`. Both return the same underlying data; `text` renders it as flat plain text without JSON syntax, which reduces token cost for MCPs and AI agents.
 // @schemes 		https
 // @license.name 	MIT
 // @contact.name 	Project Cafecito
@@ -49,10 +50,11 @@ const (
 	_DB_ERROR       = "DB just died. Retry in a bit."
 )
 
-// pageQueryParams holds shared pagination query parameters for list endpoints.
-type pageQueryParams struct {
-	Limit  int `form:"limit,default=16" binding:"min=1,max=128"`
-	Offset int `form:"offset" binding:"min=0"`
+// baseQueryParams holds shared pagination query parameters for list endpoints.
+type baseQueryParams struct {
+	ResponseType string `form:"response_type,default=json" binding:"oneof=json text"`
+	Limit        int    `form:"limit,default=16" binding:"min=1,max=128"`
+	Offset       int    `form:"offset" binding:"min=0"`
 }
 
 // sipsQueryParams holds shared filter and search parameters for /events and /signals.
@@ -62,7 +64,7 @@ type sipsQueryParams struct {
 	Q    string    `form:"q" binding:"max=1024"`
 	Acc  float64   `form:"acc,default=0.75" binding:"min=0,max=1"`
 	Tags []string  `form:"tags" collection_format:"csv"`
-	pageQueryParams
+	baseQueryParams
 }
 
 type relatedURIParams struct {
@@ -72,7 +74,7 @@ type relatedURIParams struct {
 // relatedQueryParams holds query parameters for GET /related/{relationship}.
 type relatedQueryParams struct {
 	IDs []string `form:"ids" collection_format:"csv" binding:"required"`
-	pageQueryParams
+	baseQueryParams
 }
 
 // Configuration wires database, embedding, auth, and caching dependencies into HTTP handlers.
@@ -92,11 +94,15 @@ func (r *Configuration) health(c *gin.Context) {
 // getTags godoc
 // @Summary List tags
 // @Description Returns a paginated, alphabetically sorted list of unique tag strings extracted from event and signal sips. Tags can be passed to `/events` and `/signals` for scalar filtering.
+// @Description With `response_type=text`, tags are returned as a single comma-separated plain-text string instead of a JSON array.
 // @Tags Tags
 // @Produce json
+// @Produce plain
+// @Param response_type query string false "output format: json (default) returns a JSON string array; text returns the same tags as comma-separated plain text (lower token cost for MCPs and AI agents)" Enums(json, text) default(json)
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
-// @Success 200 {array} string "paginated list of tag strings"
+// @Success 200 {array} string "JSON string array when response_type=json (default)"
+// @Success 200 {string} string "comma-separated tags when response_type=text"
 // @Success 204 "no matching tags"
 // @Failure 400 {object} ErrorResponse "invalid pagination parameters"
 // @Failure 401 {object} ErrorResponse "missing or invalid API key"
@@ -104,20 +110,36 @@ func (r *Configuration) health(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse "database error"
 // @Router /tags [get]
 func (r *Configuration) getTags(c *gin.Context) {
-	var page pageQueryParams
-	if err := c.ShouldBindQuery(&page); err != nil {
+	var params baseQueryParams
+	if err := c.ShouldBindQuery(&params); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	data, err := r.DB.GetTags(c.Request.Context(), cupboard.Pagination{Limit: page.Limit, Offset: page.Offset})
-	returnResponse(c, data, err)
+	data, err := r.DB.GetTags(c.Request.Context(), cupboard.Pagination{Limit: params.Limit, Offset: params.Offset})
+	returnResponse(c, data, err, params.ResponseType)
 }
 
-func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condition, *cupboard.Pagination) {
+func convertStringsToUUIDs(strings []string) ([]uuid.UUID, error) {
+	errs := make([]error, 0, len(strings))
+	uuids := make([]uuid.UUID, 0, len(strings))
+	for _, raw := range strings {
+		if id, err := uuid.Parse(raw); err != nil {
+			errs = append(errs, errors.New("invalid id: "+raw))
+		} else {
+			uuids = append(uuids, id)
+		}
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return uuids, nil
+}
+
+func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condition, *cupboard.Pagination, string) {
 	var input sipsQueryParams
 	if err := c.ShouldBindQuery(&input); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return nil, nil
+		return nil, nil, ""
 	}
 	conditions := cupboard.Condition{
 		Created: input.From,
@@ -127,7 +149,7 @@ func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condit
 		ids, err := convertStringsToUUIDs(input.IDs)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return nil, nil
+			return nil, nil, ""
 		}
 		conditions.IDs = ids
 	}
@@ -135,12 +157,12 @@ func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condit
 		conditions.Embedding = config.Embedder.EmbedQuery(c, input.Q)
 		if len(conditions.Embedding) == 0 {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _EMBEDDER_ERROR})
-			return nil, nil
+			return nil, nil, ""
 		}
 		config.cache.Set(input.Q, conditions.Embedding)
 		conditions.Distance = 1 - input.Acc
 	}
-	return &conditions, &cupboard.Pagination{Limit: input.Limit, Offset: input.Offset}
+	return &conditions, &cupboard.Pagination{Limit: input.Limit, Offset: input.Offset}, input.ResponseType
 }
 
 // getEvents godoc
@@ -150,16 +172,20 @@ func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condit
 // Documented fields include `briefing`, `event_type`, `key_events`, `people`, `regions`, `cross_domain_impacts`, `future_outlook`, `impact_level`, and `tags`.
 // Individual events may also carry additional pipeline-specific keys not listed in the schema.
 // Filter by exact sip UUIDs (`ids`), tag intersection (`tags`), or semantic search (`q` + `acc`). When `from` is omitted, results are limited to roughly the last 7 days.
+// @Description With `response_type=text`, each event is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
 // @Tags Events
 // @Produce json
+// @Produce plain
 // @Param ids query []string false "fetch specific event sips by UUID (RFC 4122), e.g. 339366bc-464d-582f-8132-6875ccc814d2" collectionFormat(csv)
 // @Param tags query []string false "scalar tag filters (inclusive AND across supplied tags)" collectionFormat(csv)
 // @Param q query string false "semantic search query (max 1024 characters; requires embedder)" maxlength(1024)
 // @Param acc query number false "minimum embedding similarity for `q` (0.0-1.0, higher = stricter)" default(0.75) minimum(0) maximum(1)
 // @Param from query string false "include events created on or after this date (YYYY-MM-DD)" format(date)
+// @Param response_type query string false "output format: json (default) returns a JSON array of flattened digests; text returns the same data as flat plain text without JSON syntax (lower token cost for MCPs and AI agents)" Enums(json, text) default(json)
 // @Param limit query int false "page size" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset" minimum(0)
-// @Success 200 {array} Event "events sorted by created descending; additional digest keys may be present"
+// @Success 200 {array} Event "JSON array of flattened event digests when response_type=json (default)"
+// @Success 200 {string} string "plain-text event digests (one record per block) when response_type=text"
 // @Success 204 "no matching events"
 // @Failure 400 {object} ErrorResponse "invalid query parameters or malformed UUID in ids"
 // @Failure 401 {object} ErrorResponse "missing or invalid API key"
@@ -167,13 +193,13 @@ func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condit
 // @Failure 500 {object} ErrorResponse "database or embedder error"
 // @Router /events [get]
 func (r *Configuration) getEvents(c *gin.Context) {
-	conditions, page := r.extractSipsParams(c)
+	conditions, page, response_type := r.extractSipsParams(c)
 	if conditions == nil || page == nil {
 		return
 	}
 	conditions.Kinds = cupboard.EVENTS
 	items, err := r.DB.QuerySips(c.Request.Context(), *conditions, *page)
-	returnResponse(c, items, err)
+	returnResponse(c, items, err, response_type)
 }
 
 // getSignals godoc
@@ -184,16 +210,20 @@ func (r *Configuration) getEvents(c *gin.Context) {
 // Documented fields include `briefing`, `events`, `drivers`, `impacts`, `impacted_domains`, `forecast`, `impact_level`, and `tags`.
 // Individual signals may also carry additional pipeline-specific keys not listed in the schema.
 // Filter by exact sip UUIDs (`ids`), tag intersection (`tags`), or semantic search (`q` + `acc`). When `from` is omitted, results are limited to roughly the last 7 days.
+// @Description With `response_type=text`, each signal is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
 // @Tags Signals
 // @Produce json
+// @Produce plain
 // @Param ids query []string false "fetch specific signal sips by UUID (RFC 4122), e.g. e7d7571a-13f0-56f0-8563-50863b79c781" collectionFormat(csv)
 // @Param tags query []string false "scalar tag filters (inclusive AND across supplied tags)" collectionFormat(csv)
 // @Param q query string false "semantic search query (max 1024 characters; requires embedder)" maxlength(1024)
 // @Param acc query number false "minimum embedding similarity for `q` (0.0-1.0, higher = stricter)" default(0.75) minimum(0) maximum(1)
 // @Param from query string false "include signals created on or after this date (YYYY-MM-DD)" format(date)
+// @Param response_type query string false "output format: json (default) returns a JSON array of flattened digests; text returns the same data as flat plain text without JSON syntax (lower token cost for MCPs and AI agents)" Enums(json, text) default(json)
 // @Param limit query int false "page size" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset" minimum(0)
-// @Success 200 {array} Signal "signals sorted by created descending; additional digest keys may be present"
+// @Success 200 {array} Signal "JSON array of flattened signal digests when response_type=json (default)"
+// @Success 200 {string} string "plain-text signal digests (one record per block) when response_type=text"
 // @Success 204 "no matching signals"
 // @Failure 400 {object} ErrorResponse "invalid query parameters or malformed UUID in ids"
 // @Failure 401 {object} ErrorResponse "missing or invalid API key"
@@ -201,13 +231,13 @@ func (r *Configuration) getEvents(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse "database or embedder error"
 // @Router /signals [get]
 func (r *Configuration) getSignals(c *gin.Context) {
-	conditions, page := r.extractSipsParams(c)
+	conditions, page, response_type := r.extractSipsParams(c)
 	if conditions == nil || page == nil {
 		return
 	}
 	conditions.Kinds = cupboard.SIGNALS
 	items, err := r.DB.QuerySips(c.Request.Context(), *conditions, *page)
-	returnResponse(c, items, err)
+	returnResponse(c, items, err, response_type)
 }
 
 // getRelated godoc
@@ -216,13 +246,17 @@ func (r *Configuration) getSignals(c *gin.Context) {
 // `same_as` finds equivalent or duplicate records; `derived_from` finds downstream records generated from the source sip.
 // Each result is a flattened digest with `id` (UUID) and `created` merged in.
 // Remaining fields follow the Event or Signal response shape depending on the related record's kind; additional digest keys may be present.
+// @Description With `response_type=text`, each related sip is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
 // @Tags Related
 // @Produce json
+// @Produce plain
 // @Param relationship path string true "relationship to traverse" Enums(same_as, derived_from)
 // @Param ids query []string true "source sip UUIDs (RFC 4122), e.g. b07049b5-54c0-50b0-a620-d3aea3f8a173" collectionFormat(csv)
+// @Param response_type query string false "output format: json (default) returns a JSON array of flattened digests; text returns the same data as flat plain text without JSON syntax (lower token cost for MCPs and AI agents)" Enums(json, text) default(json)
 // @Param limit query int false "page size" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset" minimum(0)
-// @Success 200 {array} Event "related sips as flattened digests (Event or Signal field set per item; additional keys may be present)"
+// @Success 200 {array} Event "JSON array of flattened related-sip digests when response_type=json (default)"
+// @Success 200 {string} string "plain-text related-sip digests (one record per block) when response_type=text"
 // @Success 204 "no related sips found"
 // @Failure 400 {object} ErrorResponse "missing ids, invalid relationship, or malformed UUID"
 // @Failure 401 {object} ErrorResponse "missing or invalid API key"
@@ -257,10 +291,33 @@ func (r *Configuration) getRelated(c *gin.Context) {
 		},
 		cupboard.Pagination{Limit: query.Limit, Offset: query.Offset},
 	)
-	returnResponse(c, items, err)
+	returnResponse(c, items, err, query.ResponseType)
 }
 
-// TODO: add duplicate routes that flatten the output into a text-only format
+func returnResponse[T any](c *gin.Context, items []T, err error, response_type string) {
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _DB_ERROR})
+		return
+	}
+	if len(items) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	if sips, ok := any(items).([]cupboard.Sip); ok {
+		if response_type == "text" {
+			c.String(http.StatusOK, sipsToText(sips))
+			return
+		}
+		c.JSON(http.StatusOK, sipsToDigest(sips))
+		return
+	} else if tags, ok := any(items).([]string); ok {
+		if response_type == "text" {
+			c.String(http.StatusOK, strings.Join(tags, ", "))
+			return
+		}
+	}
+	c.JSON(http.StatusOK, items)
+}
 
 func NewRouter(db *cupboard.Cupboard, embedder nlp.Embedder, api_keys map[string]string, max_concurrent_requests int) *gin.Engine {
 	if max_concurrent_requests <= 0 {
@@ -360,36 +417,4 @@ func requestLogger(c *gin.Context) {
 		evt.Str("error", c.Errors.String())
 	}
 	evt.Msg("incoming")
-}
-
-func returnResponse[T any](c *gin.Context, items []T, err error) {
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _DB_ERROR})
-		return
-	}
-	if len(items) == 0 {
-		c.Status(http.StatusNoContent)
-		return
-	}
-	if sips, ok := any(items).([]cupboard.Sip); ok {
-		c.JSON(http.StatusOK, flattenSips(sips))
-		return
-	}
-	c.JSON(http.StatusOK, items)
-}
-
-func convertStringsToUUIDs(strings []string) ([]uuid.UUID, error) {
-	errs := make([]error, 0, len(strings))
-	uuids := make([]uuid.UUID, 0, len(strings))
-	for _, raw := range strings {
-		if id, err := uuid.Parse(raw); err != nil {
-			errs = append(errs, errors.New("invalid id: "+raw))
-		} else {
-			uuids = append(uuids, id)
-		}
-	}
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-	return uuids, nil
 }

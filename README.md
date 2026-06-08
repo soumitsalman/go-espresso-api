@@ -130,10 +130,41 @@ Interactive schema documentation is available at `/swagger/index.html` after run
 
 ## General notes
 
-- All endpoints return JSON unless noted otherwise. Success responses use `200` or `204` (empty result set). Errors use `400`, `401`, `429`, or `500` with a body like `{ "error": "..." }`.
+- List endpoints (`/tags`, `/events`, `/signals`, `/related/{relationship}`) accept an optional `response_type` query parameter: `json` (default) or `text`. Both return the same underlying data; `text` renders it as flat plain text without JSON syntax, which reduces token cost for MCPs and AI agents. See [Response format](#response-format-response_type) below.
+- Success responses use `200` or `204` (empty result set). Errors use `400`, `401`, `429`, or `500` with a JSON body like `{ "error": "..." }`.
 - Authentication is optional. When `API_KEYS` is set, each request must include a matching header (see [Configuration](#configuration)).
 - Concurrency is limited by an in-memory queue; excess requests wait rather than fail immediately.
 - Protected routes accept only `GET` and `OPTIONS` (CORS enabled).
+
+### Response format (`response_type`)
+
+| Value | Content-Type | Description |
+|-------|--------------|-------------|
+| `json` | `application/json` | Default. Structured JSON arrays (or a JSON string array for `/tags`). |
+| `text` | `text/plain` | Same data as flat plain text — no braces, quotes, or JSON field names. Useful for MCP tools and LLM context where JSON syntax adds unnecessary tokens. |
+
+**Sip list routes** (`/events`, `/signals`, `/related/{relationship}`): each sip is one block of `key: value` lines, records separated by a blank line. Tag-like digest fields (`regions`, `people`, `tags`, etc.) are rolled into a single `related_to:` line.
+
+```text
+date: 2026-06-07
+briefing: Analysis of upcoming council tax revaluation in Wales...
+event_type: policy_reform
+impact_level: high
+actions: Cooperation Agreement signed in 2021, Re-evaluation scheduled for April 2028
+related_to: wales, public_policy, council_tax
+
+date: 2026-06-07
+briefing: Analysts note surging investor optimism...
+...
+```
+
+**Tags** (`/tags`): comma-separated tag strings instead of a JSON array.
+
+```bash
+curl -s $AUTH "$BASE_URL/events?tags=market_trends&from=2026-06-01&response_type=text"
+curl -s $AUTH "$BASE_URL/signals?q=market+volatility&acc=0.75&limit=5&response_type=text"
+curl -s $AUTH "$BASE_URL/tags?limit=20&response_type=text"
+```
 
 ---
 
@@ -175,10 +206,11 @@ curl -s $AUTH "$BASE_URL/tags?limit=20&offset=0" | jq
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `response_type` | string | `json` | `json` or `text` (comma-separated plain text) |
 | `limit` | int | 16 | Page size (1–128) |
 | `offset` | int | 0 | Number of items to skip |
 
-**Response:** JSON array of strings, e.g. `["gerrymandering", "market_volatility", "supreme_court"]`.
+**Response:** JSON array of strings by default, e.g. `["gerrymandering", "market_volatility", "supreme_court"]`. With `response_type=text`, a single comma-separated string.
 
 ---
 
@@ -203,6 +235,13 @@ curl -s $AUTH \
   "$BASE_URL/events?ids=339366bc-464d-582f-8132-6875ccc814d2" | jq
 ```
 
+Plain-text response (same filters; lower token cost for MCPs / agents):
+
+```bash
+curl -s $AUTH \
+  "$BASE_URL/events?tags=supreme_court,gerrymandering&from=2026-05-01&response_type=text"
+```
+
 | | |
 |---|---|
 | **Method** | `GET` |
@@ -218,10 +257,11 @@ curl -s $AUTH \
 | `q` | string | — | Semantic search query (max 1024 chars; requires embedder) |
 | `acc` | float | 0.75 | Minimum embedding similarity for `q` (0.0–1.0; higher = stricter) |
 | `from` | date | ~7 days ago | Include events created on or after `YYYY-MM-DD` |
+| `response_type` | string | `json` | `json` or `text` (flat plain-text digests) |
 | `limit` | int | 16 | Page size (1–128) |
 | `offset` | int | 0 | Pagination offset |
 
-**Response:** JSON array of flattened event digests. Example element:
+**Response:** JSON array of flattened event digests when `response_type=json` (default). Example element:
 
 ```json
 {
@@ -245,6 +285,8 @@ curl -s $AUTH \
 }
 ```
 
+With `response_type=text`, the same record is returned as a flat plain-text block (see [Response format](#response-format-response_type)).
+
 Additional digest keys may be present beyond those shown above.
 
 ---
@@ -256,15 +298,22 @@ curl -s $AUTH \
   "$BASE_URL/signals?tags=market_volatility,ai_taxation&from=2026-06-01&limit=5" | jq
 ```
 
+Semantic search as plain text:
+
+```bash
+curl -s $AUTH \
+  "$BASE_URL/signals?q=market+volatility&acc=0.75&limit=5&response_type=text"
+```
+
 | | |
 |---|---|
 | **Method** | `GET` |
 | **Path** | `/signals` |
 | **Description** | Signal-kind sips (derived intelligence from related events and actions), sorted by `created` descending. Supports the same filters as `/events`. |
 
-**Query parameters:** Same as [Events](#events).
+**Query parameters:** Same as [Events](#events) (including `response_type`).
 
-**Response:** JSON array of flattened signal digests. Example element:
+**Response:** JSON array of flattened signal digests when `response_type=json` (default). Example element:
 
 ```json
 {
@@ -287,6 +336,8 @@ curl -s $AUTH \
   "tags": ["ai_sovereign_wealth_fund", "ai_taxation", "inflation", "market_volatility"]
 }
 ```
+
+With `response_type=text`, each signal is a flat plain-text digest block (see [Response format](#response-format-response_type)).
 
 Additional digest keys may be present beyond those shown above.
 
@@ -316,10 +367,11 @@ curl -s $AUTH \
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `ids` | CSV UUIDs | *required* | Source sip UUIDs |
+| `response_type` | string | `json` | `json` or `text` (flat plain-text digests) |
 | `limit` | int | 16 | Page size (1–128) |
 | `offset` | int | 0 | Pagination offset |
 
-**Response:** JSON array of flattened digests. Each item follows the [Event](#events) or [Signal](#signals) field set depending on the related record's kind.
+**Response:** JSON array of flattened digests when `response_type=json` (default). Each item follows the [Event](#events) or [Signal](#signals) field set depending on the related record's kind. With `response_type=text`, plain-text digest blocks as described in [Response format](#response-format-response_type).
 
 ---
 
