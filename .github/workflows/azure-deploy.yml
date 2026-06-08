@@ -8,7 +8,7 @@ on:
       [ main ]
     paths:
     - '**'
-    - '.github/workflows/cafecito-espresso-api-AutoDeployTrigger-0a97c52e-44cd-4e66-8b67-28aed00bd231.yml'
+    - '.github/workflows/cafecito-espresso-api-AutoDeployTrigger-77af90e6-b636-49f9-96ad-0d339e244a75.yml'
 
   # Allow manual trigger 
   workflow_dispatch:      
@@ -31,6 +31,34 @@ jobs:
           tenant-id: ${{ secrets.CAFECITOESPRESSOAPI_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.CAFECITOESPRESSOAPI_AZURE_SUBSCRIPTION_ID }}
 
+      - name: Render containerapp YAML
+        run: |
+            mkdir -p .github/containerapp
+            cat > .github/containerapp/containerapp.rendered.yaml <<EOF
+            properties:
+              template:
+                containers:
+                  - name: main
+                    image: docker.io/soumitsr/espresso-api:${GITHUB_SHA}
+                    resources:
+                      cpu: 0.5
+                      memory: 1Gi
+                    env:
+                    - name: PG_CONNECTION_STRING
+                      secretRef: pg-connection-string
+                    - name: API_KEYS
+                      secretRef: api-keys
+                    - name: MAX_CONCURRENT_REQUESTS
+                      value: '512'
+                    - name: EMBEDDER_BASE_URL
+                      value: localhost:10000
+                  - name: embedder
+                    image: docker.io/soumitsr/tei-static:latest
+                    resources:
+                      cpu: 0.5
+                      memory: 1Gi
+            EOF
+
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:
@@ -42,7 +70,8 @@ jobs:
           registryPassword: ${{ secrets.CAFECITOESPRESSOAPI_REGISTRY_PASSWORD }}
           containerAppName: cafecito-espresso-api
           resourceGroup: frontends-rg
-          imageToBuild: soumitsr/cafecito-espresso-api:${{ github.sha }}
+          imageToBuild: soumitsr/espresso-api:${{ github.sha }}
+          yamlConfigPath: .github/containerapp/containerapp.rendered.yaml
           _buildArgumentsKey_: |
             _buildArgumentsValues_
 
