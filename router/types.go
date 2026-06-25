@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,12 +16,13 @@ type ErrorResponse struct {
 }
 
 // Event is the flattened JSON shape returned by GET /events and GET /related for event-kind sips.
-// The handler merges persisted sip metadata (`id`, `created`) into the digest map before responding.
+// The handler merges persisted sip metadata (`id`, `created`, `site_name`) into the digest map before responding.
 // The fields below are the stable, commonly present keys; individual records may include additional
 // pipeline-specific keys not listed here.
 type Event struct {
 	ID                 string   `json:"id" swaggertype:"string" format:"uuid" example:"339366bc-464d-582f-8132-6875ccc814d2"`
-	Created            string   `json:"created" example:"2026-05-19T06:00:00-04:00"`
+	Reported           string   `json:"reported" example:"2026-05-19T06:00:00-04:00"`
+	SiteName           string   `json:"site_name,omitempty" example:"Example News"`
 	Briefing           string   `json:"briefing" example:"Discussion on recent Supreme Court rulings affecting redistricting and implications for Black political representation in Mississippi."`
 	EventType          string   `json:"event_type" example:"political_analysis"`
 	ImpactLevel        string   `json:"impact_level" example:"high" enums:"low,medium,high"`
@@ -33,12 +35,13 @@ type Event struct {
 }
 
 // Signal is the flattened JSON shape returned by GET /signals and GET /related for signal-kind sips.
-// The handler merges persisted sip metadata (`id`, `created`) into the digest map before responding.
+// The handler merges persisted sip metadata (`id`, `created`, `site_name`) into the digest map before responding.
 // The fields below are the stable, commonly present keys; individual records may include additional
 // pipeline-specific keys not listed here.
 type Signal struct {
 	ID              string   `json:"id" swaggertype:"string" format:"uuid" example:"e7d7571a-13f0-56f0-8563-50863b79c781"`
-	Created         string   `json:"created" example:"2026-06-02T14:02:00-04:00"`
+	Reported        string   `json:"reported" example:"2026-06-02T14:02:00-04:00"`
+	SiteName        string   `json:"site_name,omitempty" example:"Example News"`
 	Briefing        string   `json:"briefing" example:"On 2026-06-02, U.S. lawmakers and the Trump administration debated AI sovereign-wealth and compute-tax proposals amid soaring inflation..."`
 	ImpactLevel     string   `json:"impact_level" example:"high" enums:"low,medium,high"`
 	Forecast        string   `json:"forecast" example:"Short-term: Market volatility will persist, AI regulatory scrutiny will intensify, and consumer confidence remains low."`
@@ -49,89 +52,186 @@ type Signal struct {
 	Tags            []string `json:"tags" example:"ai_sovereign_wealth_fund,ai_taxation,compute_tax,inflation,market_volatility"`
 }
 
+func enrichSipDigest(sip *cupboard.Sip) {
+	sip.Digest["id"] = sip.ID
+	sip.Digest["reported"] = sip.Created
+	if sip.SiteName != nil && *sip.SiteName != "" {
+		sip.Digest["site_name"] = *sip.SiteName
+	}
+}
+
 func sipsToDigest(sips []cupboard.Sip) []map[string]any {
 	for i := range sips {
-		sips[i].Digest["id"] = sips[i].ID
-		sips[i].Digest["created"] = sips[i].Created
+		enrichSipDigest(&sips[i])
 	}
 	return datautils.Transform(sips, func(sip *cupboard.Sip) map[string]any {
 		return sip.Digest
 	})
 }
 
-var _TAG_FIELDS = map[string]struct{}{
+var _entityKeys = map[string]struct{}{
 	"regions":       {},
 	"people":        {},
 	"products":      {},
 	"companies":     {},
-	"organization":  {},
 	"stock_tickers": {},
-	"tags":          {},
 }
 
-func sipsToText(sips []cupboard.Sip) string {
-	text := strings.Builder{}
-	for _, sip := range sips {
-		text.WriteString("date: ")
-		text.WriteString(sip.Created.Format(time.DateOnly))
-		text.WriteByte('\n')
+var _priorityDigestKeys = []string{"briefing", "actions"}
 
-		tags := make(map[string]struct{}, 10)
-		for key, value := range sip.Digest {
-			if _, ok := _TAG_FIELDS[key]; ok {
-				appendTags(tags, value)
-			} else {
-				text.WriteString(key)
-				text.WriteString(": ")
-				appendValue(&text, value)
-				text.WriteByte('\n')
-			}
-		}
-		if len(tags) > 0 {
-			tag_items, _ := datautils.MapToArray(tags)
-			text.WriteString("related_to: ")
-			text.WriteString(strings.Join(tag_items, ", "))
-			text.WriteByte('\n')
-		}
-		text.WriteByte('\n')
+var _outlookKeys = []string{"forecast", "future_outlook"}
+
+var _skipDigestKeys = map[string]struct{}{
+	"id":        {},
+	"created":   {},
+	"site_name": {},
+}
+
+func isEmpty(v any) bool {
+	if v == nil {
+		return true
 	}
-	return text.String()
-}
-
-func appendValue(text *strings.Builder, value any) {
-	switch typed := value.(type) {
-	case []string:
-		text.WriteString(strings.Join(typed, ", "))
+	switch typed := v.(type) {
+	case string:
+		return typed == ""
 	case []any:
-		for i, item := range typed {
-			if i > 0 {
-				text.WriteString(", ")
-			}
-			text.WriteString(fmt.Sprint(item))
-		}
+		return len(typed) == 0
+	case []string:
+		return len(typed) == 0
 	case []int:
-		for i, item := range typed {
-			if i > 0 {
-				text.WriteString(", ")
-			}
-			text.WriteString(fmt.Sprint(item))
-		}
+		return len(typed) == 0
+	case map[string]any:
+		return len(typed) == 0
 	default:
-		text.WriteString(fmt.Sprint(typed))
+		return false
 	}
 }
 
-func appendTags(seen map[string]struct{}, value any) {
-	switch typed := value.(type) {
-	case []string:
-		for _, tag := range typed {
-			seen[tag] = struct{}{}
-		}
+func valueToStr(v any) string {
+	switch typed := v.(type) {
 	case []any:
-		for _, tag := range typed {
-			seen[fmt.Sprint(tag)] = struct{}{}
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, valueToStr(item))
 		}
+		return strings.Join(parts, "|")
+	case []string:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, valueToStr(item))
+		}
+		return strings.Join(parts, "|")
+	case []int:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, valueToStr(item))
+		}
+		return strings.Join(parts, "|")
+	case map[string]any:
+		parts := make([]string, 0, len(typed))
+		for k, item := range typed {
+			if isEmpty(item) {
+				continue
+			}
+			parts = append(parts, k+":"+valueToStr(item))
+		}
+		return strings.Join(parts, "|")
+	case time.Time:
+		return typed.Format(time.DateOnly)
 	default:
-		seen[fmt.Sprint(typed)] = struct{}{}
+		return fmt.Sprint(typed)
 	}
+}
+
+func entityTags(digest map[string]any) []string {
+	seen := make(map[string]struct{}, 10)
+	for key := range _entityKeys {
+		v, ok := digest[key]
+		if !ok || isEmpty(v) {
+			continue
+		}
+		switch typed := v.(type) {
+		case []any:
+			for _, tag := range typed {
+				if !isEmpty(tag) {
+					seen[fmt.Sprint(tag)] = struct{}{}
+				}
+			}
+		case []string:
+			for _, tag := range typed {
+				if tag != "" {
+					seen[tag] = struct{}{}
+				}
+			}
+		default:
+			seen[fmt.Sprint(typed)] = struct{}{}
+		}
+	}
+	tags := make([]string, 0, len(seen))
+	for tag := range seen {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	return tags
+}
+
+func isExcludedMiddleKey(key string) bool {
+	if _, ok := _entityKeys[key]; ok {
+		return true
+	}
+	if _, ok := _skipDigestKeys[key]; ok {
+		return true
+	}
+	for _, k := range _priorityDigestKeys {
+		if k == key {
+			return true
+		}
+	}
+	for _, k := range _outlookKeys {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
+func SipToText(sip *cupboard.Sip) string {
+	var lines []string
+
+	if !sip.Created.IsZero() {
+		lines = append(lines, "reported:"+valueToStr(sip.Created))
+	}
+
+	if tags := entityTags(sip.Digest); len(tags) > 0 {
+		lines = append(lines, "related:"+strings.Join(tags, "|"))
+	}
+
+	for _, key := range _priorityDigestKeys {
+		if v, ok := sip.Digest[key]; ok && !isEmpty(v) {
+			lines = append(lines, key+":"+valueToStr(v))
+		}
+	}
+
+	for key, v := range sip.Digest {
+		if isEmpty(v) || isExcludedMiddleKey(key) {
+			continue
+		}
+		lines = append(lines, key+":"+valueToStr(v))
+	}
+
+	for _, key := range _outlookKeys {
+		if v, ok := sip.Digest[key]; ok && !isEmpty(v) {
+			lines = append(lines, key+":"+valueToStr(v))
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func SipsToText(sips []cupboard.Sip) string {
+	blocks := make([]string, len(sips))
+	for i := range sips {
+		blocks[i] = SipToText(&sips[i])
+	}
+	return strings.Join(blocks, "\n\n")
 }

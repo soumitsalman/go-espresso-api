@@ -17,9 +17,6 @@ definitions:
         example: Discussion on recent Supreme Court rulings affecting redistricting
           and implications for Black political representation in Mississippi.
         type: string
-      created:
-        example: "2026-05-19T06:00:00-04:00"
-        type: string
       cross_domain_impacts:
         example:
         - Legislative actions influencing redistricting
@@ -59,6 +56,12 @@ definitions:
         items:
           type: string
         type: array
+      reported:
+        example: "2026-05-19T06:00:00-04:00"
+        type: string
+      site_name:
+        example: Example News
+        type: string
       tags:
         example:
         - voter_suppression
@@ -75,9 +78,6 @@ definitions:
       briefing:
         example: On 2026-06-02, U.S. lawmakers and the Trump administration debated
           AI sovereign-wealth and compute-tax proposals amid soaring inflation...
-        type: string
-      created:
-        example: "2026-06-02T14:02:00-04:00"
         type: string
       drivers:
         example:
@@ -127,6 +127,12 @@ definitions:
         items:
           type: string
         type: array
+      reported:
+        example: "2026-06-02T14:02:00-04:00"
+        type: string
+      site_name:
+        example: Example News
+        type: string
       tags:
         example:
         - ai_sovereign_wealth_fund
@@ -139,13 +145,26 @@ definitions:
         type: array
     type: object
 info:
-  contact: {}
+  contact:
+    email: soumitsrah@cafecito.tech
+    name: Project Cafecito
+    url: http://cafecito.tech
+  description: |-
+    Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.
+    A **sip** is the basic unit of information: action (micro data such as market performance for a day), event (a self-contained set of micro actions and actions), and signal (larger derived intelligence from related events and actions).
+    All sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.
+    List endpoints accept an optional `response_type` query parameter: `json` (default) or `text`. Both return the same underlying data; `text` renders it as flat plain text without JSON syntax, which reduces token cost for MCPs and AI agents.
+  license:
+    name: MIT
+  title: Espresso API & MCP
+  version: "0.1"
 paths:
   /events:
     get:
       description: |-
         Returns event-kind sips sorted by `created` descending (newest first).
         With `response_type=text`, each event is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
+      operationId: searchEvents
       parameters:
       - collectionFormat: csv
         description: fetch specific event sips by UUID (RFC 4122), e.g. 339366bc-464d-582f-8132-6875ccc814d2
@@ -226,7 +245,7 @@ paths:
           description: database or embedder error
           schema:
             $ref: '#/definitions/router.ErrorResponse'
-      summary: List events
+      summary: Search events
       tags:
       - Events
   /related/{relationship}:
@@ -234,6 +253,7 @@ paths:
       description: |-
         Returns sips linked to the supplied UUIDs through the requested relationship.
         With `response_type=text`, each related sip is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
+      operationId: getRelatedSips
       parameters:
       - description: relationship to traverse
         enum:
@@ -300,7 +320,7 @@ paths:
           description: database error
           schema:
             $ref: '#/definitions/router.ErrorResponse'
-      summary: List related sips
+      summary: Get related sips by relationship
       tags:
       - Related
   /signals:
@@ -308,6 +328,7 @@ paths:
       description: |-
         Returns signal-kind sips sorted by `created` descending (newest first).
         With `response_type=text`, each signal is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
+      operationId: searchSignals
       parameters:
       - collectionFormat: csv
         description: fetch specific signal sips by UUID (RFC 4122), e.g. e7d7571a-13f0-56f0-8563-50863b79c781
@@ -388,7 +409,7 @@ paths:
           description: database or embedder error
           schema:
             $ref: '#/definitions/router.ErrorResponse'
-      summary: List signals
+      summary: Search signals
       tags:
       - Signals
   /tags:
@@ -396,6 +417,7 @@ paths:
       description: |-
         Returns a paginated, alphabetically sorted list of unique tag strings extracted from event and signal sips. Tags can be passed to `/events` and `/signals` for scalar filtering.
         With `response_type=text`, tags are returned as a single comma-separated plain-text string instead of a JSON array.
+      operationId: listTags
       parameters:
       - default: json
         description: 'output format: json (default) returns a JSON string array; text
@@ -445,7 +467,9 @@ paths:
           description: database error
           schema:
             $ref: '#/definitions/router.ErrorResponse'
-      summary: List tags
+      summary: List tags for filtering events and signals
       tags:
       - Tags
+schemes:
+- https
 swagger: "2.0"

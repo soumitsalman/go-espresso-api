@@ -27,9 +27,10 @@ const (
 	SOURCES   = "sources"
 	RELATIONS = "relations"
 
-	_SIP_FIELDS    = "id, created, digest"
+	_SIP_FROM      = "sips LEFT JOIN sources ON sips.source = sources.id"
+	_SIP_FIELDS    = "sips.id, sips.created, sips.digest, sources.site_name"
 	_SOURCE_FIELDS = "id, base_url, domain_name, site_name, description, favicon"
-	_LATEST_SIPS   = "created DESC"
+	_LATEST_SIPS   = "sips.created DESC"
 	_TRENDING_SIPS = "(SELECT count(*) FROM relations WHERE from_id = sips.id) DESC"
 )
 
@@ -91,7 +92,9 @@ func (p *Cupboard) QuerySips(ctx context.Context, conditions Condition, page Pag
 }
 
 const _RELATED_SIPS_QUERY = `
-SELECT id, created, digest FROM sips
+SELECT sips.id, sips.created, sips.digest, sources.site_name
+FROM sips
+LEFT JOIN sources ON sips.source = sources.id
 WHERE EXISTS (
 	SELECT 1 FROM relations 
 	WHERE relationship = @relationship
@@ -142,35 +145,41 @@ func (p *Cupboard) buildSQL(table string, conditions Condition, page Pagination,
 		order_parts = []string{_LATEST_SIPS, _TRENDING_SIPS}
 	}
 
+	from_expr := table
+	if table == SIPS {
+		from_expr = _SIP_FROM
+	}
+
 	// when a set of IDs are given check if a relationship is set --> query the items that are related to the given IDs
 	// otherwise query the items by the given IDs
 	if len(conditions.IDs) > 0 {
-		where_parts = append(where_parts, "id = ANY(@ids)")
+		where_parts = append(where_parts, sipColumn(table, "id")+" = ANY(@ids)")
 		params["ids"] = conditions.IDs
 	}
 	if len(conditions.Kinds) > 0 {
-		where_parts = append(where_parts, "kind = ANY(@kinds)")
+		where_parts = append(where_parts, sipColumn(table, "kind")+" = ANY(@kinds)")
 		params["kinds"] = conditions.Kinds
 	}
 	if !conditions.Created.IsZero() {
-		where_parts = append(where_parts, "created >= @created")
+		where_parts = append(where_parts, sipColumn(table, "created")+" >= @created")
 		params["created"] = conditions.Created
 	}
 	if len(conditions.Tags) > 0 {
 		if conditions.FTS {
-			where_parts = append(where_parts, "tags_fts @@ plainto_tsquery('simple', @tags)")
+			where_parts = append(where_parts, sipColumn(table, "tags_fts")+" @@ plainto_tsquery('simple', @tags)")
 			params["tags"] = strings.Join(conditions.Tags, " & ")
 		} else {
-			where_parts = append(where_parts, "tags && @tags")
+			where_parts = append(where_parts, sipColumn(table, "tags")+" && @tags")
 			params["tags"] = conditions.Tags
 		}
 	}
 	if len(conditions.Embedding) > 0 {
+		embedding_col := sipColumn(table, "embedding")
 		if conditions.Distance > 0 {
-			where_parts = append(where_parts, "embedding <=> @embedding <= @distance")
+			where_parts = append(where_parts, embedding_col+" <=> @embedding <= @distance")
 			params["distance"] = conditions.Distance
 		} else {
-			order_parts = []string{"(embedding <=> @embedding) ASC", _LATEST_SIPS}
+			order_parts = []string{"(" + embedding_col + " <=> @embedding) ASC", _LATEST_SIPS}
 		}
 		params["embedding"] = pgvector.NewVector(conditions.Embedding)
 	}
@@ -179,7 +188,7 @@ func (p *Cupboard) buildSQL(table string, conditions Condition, page Pagination,
 	}
 
 	expr_builder := strings.Builder{}
-	expr_builder.WriteString(fmt.Sprintf("SELECT %s FROM %s", fields_expr, table))
+	expr_builder.WriteString(fmt.Sprintf("SELECT %s FROM %s", fields_expr, from_expr))
 	if len(where_parts) > 0 {
 		expr_builder.WriteString("\nWHERE ")
 		expr_builder.WriteString(strings.Join(where_parts, " AND "))
@@ -191,6 +200,13 @@ func (p *Cupboard) buildSQL(table string, conditions Condition, page Pagination,
 	buildPaginationExpr(page, &expr_builder, params)
 
 	return expr_builder.String(), params
+}
+
+func sipColumn(table, column string) string {
+	if table == SIPS {
+		return "sips." + column
+	}
+	return column
 }
 
 func buildPaginationExpr(page Pagination, expr_builder *strings.Builder, params pgx.NamedArgs) {

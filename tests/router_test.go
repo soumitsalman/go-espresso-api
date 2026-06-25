@@ -245,7 +245,7 @@ func TestRouterScalarSearchEventsText(t *testing.T) {
 	status, body := routerGET(t, srv.URL, routeEvents, params, "")
 	requireStatus(t, http.StatusOK, status, body)
 	text := string(body)
-	assert.Contains(t, text, "date:")
+	assert.Contains(t, text, "reported:")
 	pp.Println("TEXT", text)
 }
 
@@ -260,7 +260,7 @@ func TestRouterVectorSearchSignalsText(t *testing.T) {
 	status, body := routerGET(t, srv.URL, routeSignals, params, "")
 	requireStatus(t, http.StatusOK, status, body)
 	text := string(body)
-	assert.Contains(t, text, "date:")
+	assert.Contains(t, text, "reported:")
 	pp.Println("TEXT", text)
 }
 

@@ -9,7 +9,14 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "contact": {
+            "name": "Project Cafecito",
+            "url": "http://cafecito.tech",
+            "email": "soumitsrah@cafecito.tech"
+        },
+        "license": {
+            "name": "MIT"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -25,7 +32,8 @@ const docTemplate = `{
                 "tags": [
                     "Events"
                 ],
-                "summary": "List events",
+                "summary": "Search events",
+                "operationId": "searchEvents",
                 "parameters": [
                     {
                         "type": "array",
@@ -145,7 +153,8 @@ const docTemplate = `{
                 "tags": [
                     "Related"
                 ],
-                "summary": "List related sips",
+                "summary": "Get related sips by relationship",
+                "operationId": "getRelatedSips",
                 "parameters": [
                     {
                         "enum": [
@@ -244,7 +253,8 @@ const docTemplate = `{
                 "tags": [
                     "Signals"
                 ],
-                "summary": "List signals",
+                "summary": "Search signals",
+                "operationId": "searchSignals",
                 "parameters": [
                     {
                         "type": "array",
@@ -364,7 +374,8 @@ const docTemplate = `{
                 "tags": [
                     "Tags"
                 ],
-                "summary": "List tags",
+                "summary": "List tags for filtering events and signals",
+                "operationId": "listTags",
                 "parameters": [
                     {
                         "enum": [
@@ -458,10 +469,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Discussion on recent Supreme Court rulings affecting redistricting and implications for Black political representation in Mississippi."
                 },
-                "created": {
-                    "type": "string",
-                    "example": "2026-05-19T06:00:00-04:00"
-                },
                 "cross_domain_impacts": {
                     "type": "array",
                     "items": {
@@ -514,6 +521,14 @@ const docTemplate = `{
                         "deep_south"
                     ]
                 },
+                "reported": {
+                    "type": "string",
+                    "example": "2026-05-19T06:00:00-04:00"
+                },
+                "site_name": {
+                    "type": "string",
+                    "example": "Example News"
+                },
                 "tags": {
                     "type": "array",
                     "items": {
@@ -535,10 +550,6 @@ const docTemplate = `{
                 "briefing": {
                     "type": "string",
                     "example": "On 2026-06-02, U.S. lawmakers and the Trump administration debated AI sovereign-wealth and compute-tax proposals amid soaring inflation..."
-                },
-                "created": {
-                    "type": "string",
-                    "example": "2026-06-02T14:02:00-04:00"
                 },
                 "drivers": {
                     "type": "array",
@@ -601,6 +612,14 @@ const docTemplate = `{
                         "Decline in consumer confidence and increased credit-card delinquency."
                     ]
                 },
+                "reported": {
+                    "type": "string",
+                    "example": "2026-06-02T14:02:00-04:00"
+                },
+                "site_name": {
+                    "type": "string",
+                    "example": "Example News"
+                },
                 "tags": {
                     "type": "array",
                     "items": {
@@ -621,12 +640,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "0.1",
 	Host:             "",
 	BasePath:         "",
-	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Schemes:          []string{"https"},
+	Title:            "Espresso API & MCP",
+	Description:      "Espresso is a curated business intelligence product suite. Espresso API & MCP provides access to the underlying data store.\nA **sip** is the basic unit of information: action (micro data such as market performance for a day), event (a self-contained set of micro actions and actions), and signal (larger derived intelligence from related events and actions).\nAll sip identifiers are UUIDs (RFC 4122), for example `339366bc-464d-582f-8132-6875ccc814d2`. Pass them as strings in query parameters and path segments.\nList endpoints accept an optional `response_type` query parameter: `json` (default) or `text`. Both return the same underlying data; `text` renders it as flat plain text without JSON syntax, which reduces token cost for MCPs and AI agents.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
