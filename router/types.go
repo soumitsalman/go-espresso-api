@@ -20,28 +20,30 @@ type ErrorResponse struct {
 // The fields below are the stable, commonly present keys; individual records may include additional
 // pipeline-specific keys not listed here.
 type Event struct {
-	ID                 string   `json:"id" swaggertype:"string" format:"uuid" example:"339366bc-464d-582f-8132-6875ccc814d2"`
-	Reported           string   `json:"reported" example:"2026-05-19T06:00:00-04:00"`
+	ID                 string   `json:"id" swaggertype:"string" format:"uuid" example:"091726f8-421a-566d-9db8-339625f2ed9e"`
+	Reported           string   `json:"reported" example:"2026-06-28T22:49:07Z"`
 	SiteName           string   `json:"site_name,omitempty" example:"Example News"`
-	Briefing           string   `json:"briefing" example:"Discussion on recent Supreme Court rulings affecting redistricting and implications for Black political representation in Mississippi."`
-	EventType          string   `json:"event_type" example:"political_analysis"`
+	Briefing           string   `json:"briefing" example:"On June 28, 2026, three U.S. firefighters died while battling rapidly spreading wildfires near the Colorado-Utah border; approximately 100 sq km burned. Temperatures reached 34°C with strong winds, prompting mass evacuations. The Snyder Fire merged with others, causing significant damage to infrastructure like ski resorts. Causes include severe drought and human factors. This incident reflects escalating regional wildfire risks driven by climate change."`
+	EventType          string   `json:"event_type" example:"wildfire_outbreak"`
 	ImpactLevel        string   `json:"impact_level" example:"high" enums:"low,medium,high"`
-	FutureOutlook      string   `json:"future_outlook" example:"Concerns about erosion of Black political influence amid ongoing gerrymandering debates; potential shifts in power dynamics."`
-	Actions            []string `json:"actions" example:"Senator Bernie Sanders introduced a 50% ownership tax on major AI firms"`
-	CrossDomainImpacts []string `json:"cross_domain_impacts" example:"Legislative actions influencing redistricting,Judicial changes altering court mandates on fair representation"`
-	People             []string `json:"people" example:"michael_watts,rep_bennie_thompson"`
-	Regions            []string `json:"regions" example:"mississippi,deep_south"`
-	Tags               []string `json:"tags" example:"voter_suppression,gerrymandering,racial_politics,supreme_court,political_representation"`
+	FutureOutlook      string   `json:"future_outlook" example:"Continued extreme fire seasons expected without mitigation efforts."`
+	Actions            []string `json:"actions" example:"2026-06-28 Firefighters died and injuries occurred at Wyoming-Utah border.,2026-06-28 Large wildfire destroyed parts of ski resorts."`
+	CrossDomainImpacts []string `json:"cross_domain_impacts" example:"public_safety: Increased risk of civilian casualties.,tourism: Disruption of winter sports facilities.,environmental: Habitat loss in mountainous areas."`
+	Companies          []string `json:"companies,omitempty" example:"us_federal,us_state"`
+	Products           []string `json:"products,omitempty" example:"petróleo"`
+	MacroContext       string   `json:"macro_context,omitempty" example:"western_us_climate_crisis"`
+	People             []string `json:"people,omitempty" example:"firefighter_john_doe,governor_polis"`
+	Regions            []string `json:"regions" example:"colorado,utah"`
+	Tags               []string `json:"tags" example:"wildfire,climate_change,us,emergency_response"`
 }
 
 // Signal is the flattened JSON shape returned by GET /signals and GET /related for signal-kind sips.
-// The handler merges persisted sip metadata (`id`, `created`, `site_name`) into the digest map before responding.
+// The handler merges persisted sip metadata (`id`, `created`) into the digest map before responding.
 // The fields below are the stable, commonly present keys; individual records may include additional
 // pipeline-specific keys not listed here.
 type Signal struct {
 	ID              string   `json:"id" swaggertype:"string" format:"uuid" example:"e7d7571a-13f0-56f0-8563-50863b79c781"`
 	Reported        string   `json:"reported" example:"2026-06-02T14:02:00-04:00"`
-	SiteName        string   `json:"site_name,omitempty" example:"Example News"`
 	Briefing        string   `json:"briefing" example:"On 2026-06-02, U.S. lawmakers and the Trump administration debated AI sovereign-wealth and compute-tax proposals amid soaring inflation..."`
 	ImpactLevel     string   `json:"impact_level" example:"high" enums:"low,medium,high"`
 	Forecast        string   `json:"forecast" example:"Short-term: Market volatility will persist, AI regulatory scrutiny will intensify, and consumer confidence remains low."`
@@ -55,9 +57,6 @@ type Signal struct {
 func enrichSipDigest(sip *cupboard.Sip) {
 	sip.Digest["id"] = sip.ID
 	sip.Digest["reported"] = sip.Created
-	if sip.SiteName != nil && *sip.SiteName != "" {
-		sip.Digest["site_name"] = *sip.SiteName
-	}
 }
 
 func sipsToDigest(sips []cupboard.Sip) []map[string]any {
@@ -82,9 +81,8 @@ var _priorityDigestKeys = []string{"briefing", "actions"}
 var _outlookKeys = []string{"forecast", "future_outlook"}
 
 var _skipDigestKeys = map[string]struct{}{
-	"id":        {},
-	"created":   {},
-	"site_name": {},
+	"id":      {},
+	"created": {},
 }
 
 func isEmpty(v any) bool {

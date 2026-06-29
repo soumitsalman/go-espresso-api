@@ -462,12 +462,23 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "Senator Bernie Sanders introduced a 50% ownership tax on major AI firms"
+                        "2026-06-28 Firefighters died and injuries occurred at Wyoming-Utah border.",
+                        "2026-06-28 Large wildfire destroyed parts of ski resorts."
                     ]
                 },
                 "briefing": {
                     "type": "string",
-                    "example": "Discussion on recent Supreme Court rulings affecting redistricting and implications for Black political representation in Mississippi."
+                    "example": "On June 28, 2026, three U.S. firefighters died while battling rapidly spreading wildfires near the Colorado-Utah border; approximately 100 sq km burned. Temperatures reached 34°C with strong winds, prompting mass evacuations. The Snyder Fire merged with others, causing significant damage to infrastructure like ski resorts. Causes include severe drought and human factors. This incident reflects escalating regional wildfire risks driven by climate change."
+                },
+                "companies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "us_federal",
+                        "us_state"
+                    ]
                 },
                 "cross_domain_impacts": {
                     "type": "array",
@@ -475,22 +486,23 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "Legislative actions influencing redistricting",
-                        "Judicial changes altering court mandates on fair representation"
+                        "public_safety: Increased risk of civilian casualties.",
+                        "tourism: Disruption of winter sports facilities.",
+                        "environmental: Habitat loss in mountainous areas."
                     ]
                 },
                 "event_type": {
                     "type": "string",
-                    "example": "political_analysis"
+                    "example": "wildfire_outbreak"
                 },
                 "future_outlook": {
                     "type": "string",
-                    "example": "Concerns about erosion of Black political influence amid ongoing gerrymandering debates; potential shifts in power dynamics."
+                    "example": "Continued extreme fire seasons expected without mitigation efforts."
                 },
                 "id": {
                     "type": "string",
                     "format": "uuid",
-                    "example": "339366bc-464d-582f-8132-6875ccc814d2"
+                    "example": "091726f8-421a-566d-9db8-339625f2ed9e"
                 },
                 "impact_level": {
                     "type": "string",
@@ -501,14 +513,27 @@ const docTemplate = `{
                     ],
                     "example": "high"
                 },
+                "macro_context": {
+                    "type": "string",
+                    "example": "western_us_climate_crisis"
+                },
                 "people": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     },
                     "example": [
-                        "michael_watts",
-                        "rep_bennie_thompson"
+                        "firefighter_john_doe",
+                        "governor_polis"
+                    ]
+                },
+                "products": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "petróleo"
                     ]
                 },
                 "regions": {
@@ -517,13 +542,13 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "mississippi",
-                        "deep_south"
+                        "colorado",
+                        "utah"
                     ]
                 },
                 "reported": {
                     "type": "string",
-                    "example": "2026-05-19T06:00:00-04:00"
+                    "example": "2026-06-28T22:49:07Z"
                 },
                 "site_name": {
                     "type": "string",
@@ -535,11 +560,10 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "voter_suppression",
-                        "gerrymandering",
-                        "racial_politics",
-                        "supreme_court",
-                        "political_representation"
+                        "wildfire",
+                        "climate_change",
+                        "us",
+                        "emergency_response"
                     ]
                 }
             }
@@ -615,10 +639,6 @@ const docTemplate = `{
                 "reported": {
                     "type": "string",
                     "example": "2026-06-02T14:02:00-04:00"
-                },
-                "site_name": {
-                    "type": "string",
-                    "example": "Example News"
                 },
                 "tags": {
                     "type": "array",

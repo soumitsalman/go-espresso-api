@@ -261,28 +261,52 @@ curl -s $AUTH \
 | `limit` | int | 16 | Page size (1–128) |
 | `offset` | int | 0 | Pagination offset |
 
-**Response:** JSON array of flattened event digests when `response_type=json` (default). Example element:
+**Response:** JSON array of flattened event digests when `response_type=json` (default). Example elements:
 
 ```json
-{
-  "id": "339366bc-464d-582f-8132-6875ccc814d2",
-  "created": "2026-05-19T06:00:00-04:00",
-  "briefing": "Discussion on recent Supreme Court rulings affecting redistricting...",
-  "event_type": "political_analysis",
-  "impact_level": "high",
-  "future_outlook": "Concerns about erosion of Black political influence...",
-  "actions": [
-    "Voting rights activism in 1987",
-    "Supreme Court's Louisiana v. Callais decision"
-  ],
-  "cross_domain_impacts": [
-    "Legislative actions influencing redistricting",
-    "Judicial changes altering court mandates on fair representation"
-  ],
-  "people": ["michael_watts", "rep_bennie_thompson"],
-  "regions": ["mississippi", "deep_south"],
-  "tags": ["voter_suppression", "gerrymandering", "supreme_court"]
-}
+[
+  {
+    "id": "091726f8-421a-566d-9db8-339625f2ed9e",
+    "reported": "2026-06-28T22:49:07Z",
+    "briefing": "On June 28, 2026, three U.S. firefighters died while battling rapidly spreading wildfires near the Colorado-Utah border; approximately 100 sq km burned. Temperatures reached 34°C with strong winds, prompting mass evacuations. The Snyder Fire merged with others, causing significant damage to infrastructure like ski resorts. Causes include severe drought and human factors. This incident reflects escalating regional wildfire risks driven by climate change.",
+    "event_type": "wildfire_outbreak",
+    "impact_level": "high",
+    "future_outlook": "Continued extreme fire seasons expected without mitigation efforts.",
+    "actions": [
+      "2026-06-28 Firefighters died and injuries occurred at Wyoming-Utah border.",
+      "2026-06-28 Large wildfire destroyed parts of ski resorts."
+    ],
+    "cross_domain_impacts": [
+      "public_safety: Increased risk of civilian casualties.",
+      "tourism: Disruption of winter sports facilities.",
+      "environmental: Habitat loss in mountainous areas."
+    ],
+    "companies": ["us_federal", "us_state"],
+    "regions": ["colorado", "utah"],
+    "macro_context": "western_us_climate_crisis",
+    "tags": ["wildfire", "climate_change", "us", "emergency_response"]
+  },
+  {
+    "id": "6b4562d2-0a5c-540f-a39e-f1d5cad4ee5f",
+    "reported": "2026-06-28T21:52:00Z",
+    "briefing": "On June 28, 2026, U.S.-Iran governments reached an emergency agreement halting military clashes amid regional tensions. The pause prevents broader war while resuming negotiations by June 30 focused on Ormuz Strait security. This diplomatic step averts immediate market shocks but depends on both sides lowering aggressive rhetoric for tangible outcomes.",
+    "event_type": "diplomatic_ceasefire",
+    "impact_level": "high",
+    "future_outlook": "Talks may stabilize but risk re-escalation without sustained engagement.",
+    "actions": [
+      "2026-06-28 Governments of United States and Iran agree to cease fire",
+      "2026-06-30 Bilateral talks scheduled in Oruz"
+    ],
+    "cross_domain_impacts": [
+      "energy_markets: Reduced oil volatility expected",
+      "security_framework: Gulf stability improved temporarily"
+    ],
+    "products": ["petróleo"],
+    "regions": ["gulf", "ormuz"],
+    "macro_context": "middle_east_conflict_resolution",
+    "tags": ["diplomacy", "gulf", "iran", "us", "fuel"]
+  }
+]
 ```
 
 With `response_type=text`, the same record is returned as a flat plain-text block (see [Response format](#response-format-response_type)).

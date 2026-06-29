@@ -15,12 +15,11 @@ import (
 //   - event: a self-contained set of related micro actions and actions (for example a court ruling and its local fallout)
 //   - signal: larger derived intelligence synthesized from related events and actions (for example cross-domain market and policy outlook)
 //
-// List endpoints do not return this struct directly; the router flattens Digest and merges id, created, and site_name into each JSON object.
+// List endpoints do not return this struct directly; the router flattens Digest and merges id and created into each JSON object.
 type Sip struct {
-	ID       uuid.UUID      `db:"id" json:"id" swaggertype:"string" format:"uuid" example:"339366bc-464d-582f-8132-6875ccc814d2"`
-	Created  time.Time      `db:"created" json:"created" example:"2026-05-19T06:00:00-04:00"`
-	Digest   map[string]any `db:"digest" swaggertype:"object"`
-	SiteName *string        `db:"site_name"`
+	ID      uuid.UUID      `db:"id" json:"id" swaggertype:"string" format:"uuid" example:"339366bc-464d-582f-8132-6875ccc814d2"`
+	Created time.Time      `db:"created" json:"created" example:"2026-05-19T06:00:00-04:00"`
+	Digest  map[string]any `db:"digest" swaggertype:"object"`
 }
 
 // Source describes a content publisher tracked in the database.

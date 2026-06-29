@@ -169,8 +169,8 @@ func (config *Configuration) extractSipsParams(c *gin.Context) (*cupboard.Condit
 // getEvents godoc
 // @Summary Search events
 // @Description Returns event-kind sips sorted by `created` descending (newest first).
-// Each item is a flattened digest: the router merges `id` (UUID), `created`, and `site_name` (when the sip's source exists in `sources`) into the digest before responding.
-// Documented fields include `briefing`, `event_type`, `key_events`, `people`, `regions`, `cross_domain_impacts`, `future_outlook`, `impact_level`, `site_name`, and `tags`.
+// Each item is a flattened digest: the router merges `id` (UUID) and `created` into the digest before responding.
+// Documented fields include `briefing`, `event_type`, `key_events`, `people`, `regions`, `cross_domain_impacts`, `future_outlook`, `impact_level`, and `tags`.
 // Individual events may also carry additional pipeline-specific keys not listed in the schema.
 // Filter by exact sip UUIDs (`ids`), tag intersection (`tags`), or semantic search (`q` + `acc`). When `from` is omitted, results are limited to roughly the last 7 days.
 // @Description With `response_type=text`, each event is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
@@ -208,8 +208,8 @@ func (r *Configuration) getEvents(c *gin.Context) {
 // @Summary Search signals
 // @Description Returns signal-kind sips sorted by `created` descending (newest first).
 // Signals are derived intelligence synthesized from related events and actions.
-// Each item is a flattened digest: the router merges `id` (UUID), `created`, and `site_name` (when the sip's source exists in `sources`) into the digest before responding.
-// Documented fields include `briefing`, `events`, `drivers`, `impacts`, `impacted_domains`, `forecast`, `impact_level`, `site_name`, and `tags`.
+// Each item is a flattened digest: the router merges `id` (UUID) and `created` into the digest before responding.
+// Documented fields include `briefing`, `events`, `drivers`, `impacts`, `impacted_domains`, `forecast`, `impact_level`, and `tags`.
 // Individual signals may also carry additional pipeline-specific keys not listed in the schema.
 // Filter by exact sip UUIDs (`ids`), tag intersection (`tags`), or semantic search (`q` + `acc`). When `from` is omitted, results are limited to roughly the last 7 days.
 // @Description With `response_type=text`, each signal is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
@@ -247,7 +247,7 @@ func (r *Configuration) getSignals(c *gin.Context) {
 // @Summary Get related sips by relationship
 // @Description Returns sips linked to the supplied UUIDs through the requested relationship.
 // `same_as` finds equivalent or duplicate records; `derived_from` finds downstream records generated from the source sip.
-// Each result is a flattened digest with `id` (UUID), `created`, and `site_name` (when available) merged in.
+// Each result is a flattened digest with `id` (UUID) and `created` merged in.
 // Remaining fields follow the Event or Signal response shape depending on the related record's kind; additional digest keys may be present.
 // @Description With `response_type=text`, each related sip is rendered as a flat plain-text digest (field-per-line) instead of a JSON object — same data, fewer tokens for MCPs and AI agents.
 // @Tags Related

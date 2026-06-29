@@ -27,8 +27,8 @@ const (
 	SOURCES   = "sources"
 	RELATIONS = "relations"
 
-	_SIP_FROM      = "sips LEFT JOIN sources ON sips.source = sources.id"
-	_SIP_FIELDS    = "sips.id, sips.created, sips.digest, sources.site_name"
+	_SIP_FROM      = "sips"
+	_SIP_FIELDS    = "id, created, digest"
 	_SOURCE_FIELDS = "id, base_url, domain_name, site_name, description, favicon"
 	_LATEST_SIPS   = "sips.created DESC"
 	_TRENDING_SIPS = "(SELECT count(*) FROM relations WHERE from_id = sips.id) DESC"
@@ -92,11 +92,10 @@ func (p *Cupboard) QuerySips(ctx context.Context, conditions Condition, page Pag
 }
 
 const _RELATED_SIPS_QUERY = `
-SELECT sips.id, sips.created, sips.digest, sources.site_name
+SELECT id, created, digest
 FROM sips
-LEFT JOIN sources ON sips.source = sources.id
 WHERE EXISTS (
-	SELECT 1 FROM relations 
+	SELECT 1 FROM relations
 	WHERE relationship = @relationship
 	AND ((from_id = ANY(@ids) AND to_id=sips.id) OR (to_id = ANY(@ids) AND from_id=sips.id))
 )`
